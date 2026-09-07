@@ -193,3 +193,140 @@ h1, .brand {
     margin: 0 auto;
     padding: 0 1.5rem;
 }
+
+.section {
+    padding: 4.5rem 0;
+    border-top: 1px solid var(--line);
+}
+
+.section-title {
+    font-size: 2.2rem;
+    margin-bottom: 2.5rem;
+    color: var(--ink);
+}
+
+.timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.35rem; 
+    top: 0.5rem;
+    bottom: 0;
+    width: 2px;
+    background-color: var(--line);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 2.5rem;
+}
+
+.timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+.timeline-dot {
+    position: absolute;
+    left: -2rem;
+    top: 0.35rem;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    border: 2px solid var(--paper);
+    box-shadow: 0 0 0 2px var(--ink); 
+}
+
+.timeline-date {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-dark);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 0.4rem;
+}
+
+.timeline-school {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.4rem;
+    color: var(--ink);
+    margin-bottom: 0.25rem;
+}
+
+.timeline-degree {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+.skills-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.skill-tag {
+    display: inline-block;
+    padding: 0.4rem 1.1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ink);
+    background-color: transparent;
+    border: 1px solid var(--ink);
+    border-radius: 100px; /* Gives the pill/tiny rounded shape */
+    transition: all 0.2s ease;
+}
+
+.skill-tag:hover {
+    background-color: var(--ink);
+    color: var(--paper);
+    transform: translateY(-2px);
+}
+
+.certificates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.cert-card {
+    padding: 1.75rem;
+    border: 2px solid var(--ink);
+    border-radius: var(--radius);
+    background-color: var(--paper);
+    box-shadow: 6px 6px 0 var(--accent);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cert-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 8px 8px 0 var(--accent);
+}
+
+.cert-year {
+    display: inline-block;
+    background-color: var(--ink);
+    color: var(--paper);
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.25rem 0.6rem;
+    border-radius: var(--radius);
+    margin-bottom: 1.25rem;
+}
+
+.cert-title {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.15rem;
+    line-height: 1.4;
+    margin-bottom: 0.5rem;
+    color: var(--ink);
+}
+
+.cert-org {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
