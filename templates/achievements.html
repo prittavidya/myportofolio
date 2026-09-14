@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Experience - {{ name }}</title>
+    <title>Achievements - {{ name }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -22,31 +22,25 @@
     </header>
 
     <main>
-        <section class="experience-section" id="experience">
+        <section class="experience-section" id="achievements">
             <div class="container">
-                <p class="section-kicker">Perjalanan saya sejauh ini</p>
-                <h1>Experience</h1>
+                <p class="section-kicker">Pencapaian saya sejauh ini</p>
+                <h1>Achievements</h1>
 
                 <div class="experience-grid">
-                    {% for experience in experience_list %}
+                    {% for achievement in achievements %}
                         <article class="experience-card">
                             <span class="experience-category">
-                                {{ experience.get_category_display }}
+                                {{ achievement.year }}
                             </span>
-                            <h2>{{ experience.title }}</h2>
+                            <h2>{{ achievement.name }}</h2>
                             <p class="experience-description">
-                                {{ experience.description }}
+                                Diberikan oleh: {{ achievement.issuer }}
                             </p>
-
-                            {% if experience.is_ongoing %}
-                                <p class="experience-status is-ongoing">Sedang berlangsung</p>
-                            {% else %}
-                                <p class="experience-status">Selesai</p>
-                            {% endif %}
                         </article>
                     {% empty %}
                         <p class="empty-state">
-                            Belum ada pengalaman yang ditambahkan.
+                            Belum ada achievement yang ditambahkan.
                         </p>
                     {% endfor %}
                 </div>
