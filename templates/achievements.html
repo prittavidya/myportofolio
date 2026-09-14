@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Achievements - {{ name }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container">
+            <a href="{% url 'main:show_main' %}" class="brand">{{ name }}</a>
+            <nav>
+                <a href="{% url 'main:show_main' %}">Profile</a>
+                <a href="{% url 'main:show_experience' %}">Experience</a>
+                <!-- Link baru ditambahkan ke navbar -->
+                <a href="{% url 'main:show_achievements' %}">Achievements</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="experience-section" id="achievements">
+            <div class="container">
+                <p class="section-kicker">Pencapaian saya sejauh ini</p>
+                <h1>Achievements</h1>
+
+                <div class="experience-grid">
+                    {% for achievement in achievements %}
+                        <article class="experience-card">
+                            <span class="experience-category">
+                                {{ achievement.year }}
+                            </span>
+                            <h2>{{ achievement.name }}</h2>
+                            <p class="experience-description">
+                                Diberikan oleh: {{ achievement.issuer }}
+                            </p>
+                        </article>
+                    {% empty %}
+                        <p class="empty-state">
+                            Belum ada achievement yang ditambahkan.
+                        </p>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>&copy; 2026 {{ name }}. Fakultas Ilmu Komputer, Universitas Indonesia.</p>
+        </div>
+    </footer>
+</body>
+</html>
