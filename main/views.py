@@ -26,7 +26,7 @@ def show_experience(request):
 
 def show_achievements(request):
     context = {
-        "achivements": Achievements.objects.all(),
+        "achievements": Achievements.objects.all(),
         "name": "Joanna Prittavidya Putri Arianto",
     }
     return render(request, "achievements.html", context)

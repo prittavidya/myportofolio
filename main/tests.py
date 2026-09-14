@@ -1,8 +1,9 @@
-from django.test import TestCase
+from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 
 from main.models import Experience
+from .models import Achievements
 
 
 class MainTest(TestCase):
@@ -56,4 +57,34 @@ class MainTest(TestCase):
         self.assertFalse(self.experience.is_ongoing)
         self.assertContains(response, "Selesai")
         self.assertNotContains(response, "Sedang berlangsung")
+
+class AchievementsTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+    def test_url_exists_at_correct_location_and_uses_template(self):
+        """Test apakah URL achievements bisa diakses dan memakai template yang benar"""
+        response = self.client.get(reverse('main:show_achievements'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'achievements.html')
+
+    def test_empty_state_message_is_shown(self):
+        """Test apakah pesan kondisi kosong muncul ketika belum ada data achievement"""
+        response = self.client.get(reverse('main:show_achievements'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Belum ada achievement yang ditambahkan.")
+
+    def test_achievement_data_is_rendered(self):
+        """Test apakah data achievement muncul di halaman HTML ketika ada data"""
+        Achievements.objects.create(
+            name="Juara 1 Hackathon",
+            issuer="Fasilkom UI",
+            year=2026
+        )
+        response = self.client.get(reverse('main:show_achievements'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Juara 1 Hackathon")
+        self.assertContains(response, "Fasilkom UI")
+        self.assertContains(response, "2026")
+        self.assertNotContains(response, "Belum ada achievement yang ditambahkan.")
 
