@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from main.models import Experience
-from .models import Achievements
+from .models import Achievement
 
 
 class MainTest(TestCase):
@@ -58,7 +58,7 @@ class MainTest(TestCase):
         self.assertContains(response, "Selesai")
         self.assertNotContains(response, "Sedang berlangsung")
 
-class AchievementsTest(TestCase):
+class AchievementTest(TestCase):
     def setUp(self):
         self.client = Client()
 
@@ -76,7 +76,7 @@ class AchievementsTest(TestCase):
 
     def test_achievement_data_is_rendered(self):
         """Test apakah data achievement muncul di halaman HTML ketika ada data"""
-        Achievements.objects.create(
+        Achievement.objects.create(
             name="Juara 1 Hackathon",
             issuer="Fasilkom UI",
             year=2026

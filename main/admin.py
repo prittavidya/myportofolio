@@ -1,4 +1,4 @@
 from django.contrib import admin
-from .models import Achievements
+from .models import Achievement
 
-admin.site.register(Achievements)
+admin.site.register(Achievement)
