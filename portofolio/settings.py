@@ -153,3 +153,6 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+# Ganti dengan URL PWS kamu, gunakan https://
+CSRF_TRUSTED_ORIGINS = ["https://joanna-prittavidya-myportofolio.pws.cs.ui.ac.id"]

@@ -27,7 +27,8 @@ class Experience(models.Model):
     def is_ongoing(self):
         return self.ended_at is None
 
-class Achievements(models.Model):
+class Achievement(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     issuer = models.CharField(max_length=255)
     year = models.IntegerField()

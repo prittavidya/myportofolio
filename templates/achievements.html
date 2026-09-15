@@ -1,57 +1,56 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% extends "base.html" %}
+
+{% block meta %}
     <title>Achievements - {{ name }}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <header class="site-header">
-        <div class="container">
-            <a href="{% url 'main:show_main' %}" class="brand">{{ name }}</a>
-            <nav>
-                <a href="{% url 'main:show_main' %}">Profile</a>
-                <a href="{% url 'main:show_experience' %}">Experience</a>
-                <a href="{% url 'main:show_achievements' %}">Achievements</a>
-            </nav>
-        </div>
-    </header>
+{% endblock meta %}
 
-    <main>
-        <section class="experience-section" id="achievements">
-            <div class="container">
-                <p class="section-kicker">Pencapaian saya sejauh ini</p>
+{% block content %}
+<main>
+    <section class="experience-section" id="achievements">
+        <div class="container">
+            <p class="section-kicker">Pencapaian saya sejauh ini</p>
+            
+            <div class="project-header">
                 <h1>Achievements</h1>
-
-                <div class="experience-grid">
-                    {% for achievement in achievements %}
-                        <article class="experience-card">
-                            <span class="experience-category">
-                                {{ achievement.year }}
-                            </span>
-                            <h2>{{ achievement.name }}</h2>
-                            <p class="experience-description">
-                                Diberikan oleh: {{ achievement.issuer }}
-                            </p>
-                        </article>
-                    {% empty %}
-                        <p class="empty-state">
-                            Belum ada achievement yang ditambahkan.
-                        </p>
-                    {% endfor %}
-                </div>
+                <a href="{% url 'main:create_achievement' %}" class="button project-add-button">
+                    <span aria-hidden="true">+</span> Tambah Achievement
+                </a>
             </div>
-        </section>
-    </main>
 
-    <footer class="site-footer">
-        <div class="container">
-            <p>&copy; 2026 {{ name }}. Fakultas Ilmu Komputer, Universitas Indonesia.</p>
+            <form method="get" action="{% url 'main:show_achievements' %}" class="project-search">
+                <input type="search" 
+                       name="name" 
+                       value="{{ name_query }}" 
+                       placeholder="Cari berdasarkan nama pencapaian" 
+                       class="project-search__input" 
+                       aria-label="Cari berdasarkan nama pencapaian">
+                <button type="submit" class="button">Cari</button>
+            </form>
+
+            <div class="experience-grid">
+                {% for achievement in achievements %}
+                    <article class="experience-card">
+                        <span class="experience-category">
+                            {{ achievement.year }}
+                        </span>
+                        <h2>{{ achievement.name }}</h2>
+                        <p class="experience-description">
+                            Diberikan oleh: {{ achievement.issuer }}
+                        </p>
+                        
+                        <div class="project-card-actions">
+                            {% include "components/achievement_delete_modal.html" with achievement=achievement %}
+                        </div>
+                    </article>
+                {% empty %}
+                    {% if name_query %}
+                        <p class="empty-state">Tidak ada pencapaian dengan nama tersebut.</p>
+                    {% else %}
+                        <p class="empty-state">Belum ada achievement yang ditambahkan.</p>
+                    {% endif %}
+                {% endfor %}
+            </div>
         </div>
-    </footer>
-</body>
-</html>
+    </section>
+</main>
+{% endblock content %}
