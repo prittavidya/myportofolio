@@ -37,8 +37,14 @@
                         <p class="experience-description">
                             Diberikan oleh: {{ achievement.issuer }}
                         </p>
+                        {% if achievement.description %}
+                            <p class="experience-description">{{ achievement.description }}</p>
+                        {% endif %}
                         
                         <div class="project-card-actions">
+                            <div class="project-actions">
+                                <a href="{% url 'main:edit_achievement' achievement.id %}" class="button button-secondary">Edit Pencapaian</a>
+                            </div>
                             {% include "components/achievement_delete_modal.html" with achievement=achievement %}
                         </div>
                     </article>

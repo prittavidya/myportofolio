@@ -709,3 +709,23 @@ h1, .brand {
         text-align: center;
     }
 }
+
+/* flash messages */
+
+.messages {
+    margin-top: 1rem;
+}
+
+.message {
+    margin: 0 0 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    background: #fff;
+    font-weight: 700;
+}
+
+.message-error {
+    border-color: #b42318;
+    color: #b42318;
+}

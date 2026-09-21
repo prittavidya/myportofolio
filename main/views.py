@@ -61,6 +61,25 @@ def create_achievement(request):
     context = {
         "name": "Joanna", 
         "form": form,
+        "is_edit": False,
+    }
+    return render(request, "achievement_form.html", context)
+
+def edit_achievement(request, achievement_id):
+    achievement = get_object_or_404(Achievement, pk=achievement_id)
+    # instance= membuat form terisi data lama dan menyimpan sebagai UPDATE, bukan INSERT
+    form = AchievementForm(request.POST or None, instance=achievement)
+
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Achievement berhasil diperbarui!")
+        return redirect("main:show_achievements")
+
+    context = {
+        "name": "Joanna",
+        "form": form,
+        "is_edit": True,
+        "achievement": achievement,
     }
     return render(request, "achievement_form.html", context)
 
@@ -74,6 +93,10 @@ def get_achievements_json(request):
     achievements_json = serializers.serialize("json", achievements)
     
     return HttpResponse(achievements_json, content_type="application/json")
+
+def get_experience_json(request):
+    experience_json = serializers.serialize("json", Experience.objects.all())
+    return HttpResponse(experience_json, content_type="application/json")
 
 def delete_achievement(request, achievement_id):
     # Mengambil objek berdasarkan ID, atau memunculkan error 404 jika tidak ada
