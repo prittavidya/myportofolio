@@ -1,19 +1,23 @@
-from django.forms import ModelForm, TextInput, NumberInput
+from django.forms import ModelForm, NumberInput, Textarea, TextInput
+
 from main.models import Achievement
 
+
 class AchievementForm(ModelForm):
+    """Form untuk membuat dan mengubah Achievement.
+
+    `id` tidak dimasukkan karena dibuat otomatis (UUID) dan tidak boleh diubah.
+    """
+
     class Meta:
         model = Achievement
-        fields = [
-            "name", 
-            "issuer", 
-            "year"
-        ]
+        fields = ["name", "issuer", "year", "description"]
 
         labels = {
             "name": "Nama Pencapaian",
             "issuer": "Penyelenggara / Institusi",
             "year": "Tahun",
+            "description": "Deskripsi (opsional)",
         }
 
         widgets = {
@@ -32,6 +36,12 @@ class AchievementForm(ModelForm):
             "year": NumberInput(
                 attrs={
                     "placeholder": "Contoh: 2026",
+                }
+            ),
+            "description": Textarea(
+                attrs={
+                    "placeholder": "Ceritakan singkat tentang pencapaian ini",
+                    "rows": 4,
                 }
             ),
         }

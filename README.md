@@ -20,3 +20,27 @@ Saya menggunakan Gemini untuk membantu saya dalam pengerjaan melanjutkan website
 AI DISCLOSURE
 Saya menggunakan Gemini untuk membantu saya dalam pengerjaan tugas individu 2. Saya meminta AI untuk menjelaskan alur tugas secara step by step, bertanya ketika ada bagian yang saya tidak mengerti.
 Link chatlog: https://share.gemini.google/MGvFROVvAh8X
+
+### Tugas 3
+
+1. **ModelForm** menghubungkan form langsung dengan model (`Achievement`), sehingga field, tipe input, `max_length`, dan aturan validasi (misalnya `year` harus angka, `name` wajib diisi) diturunkan otomatis dari definisi model. Jika membuat form HTML manual, saya harus menulis ulang setiap field, validasi, dan proses konversi tipe data di dua tempat (HTML dan view), yang mudah tidak sinkron ketika model berubah. ModelForm juga menyediakan `form.is_valid()` untuk validasi di sisi server, `form.errors` untuk pesan kesalahan, `form.save()` untuk menyimpan data, dan `instance=` untuk mengisi form dengan data lama saat update, sehingga kode lebih ringkas dan konsisten. `{% csrf_token %}` wajib ada karena form dengan method POST mengubah data di server. Tanpa token tersebut, situs lain dapat membuat browser pengguna yang sedang login mengirim request POST palsu ke aplikasi kita (serangan *Cross-Site Request Forgery*), karena browser otomatis menyertakan cookie sesi. Token CSRF adalah nilai acak unik per sesi yang hanya diketahui halaman kita; Django menolak request POST (403) yang tidak membawa token yang cocok, sehingga hanya form yang benar-benar berasal dari situs kita yang diterima.
+2. JSON lebih disukai karena lebih ringkas dan lebih mudah dibaca dibandingkan XML yang memerlukan tag pembuka dan penutup untuk setiap elemen, sehingga ukuran data lebih kecil dan transfer lebih cepat. JSON juga merupakan subset dari sintaks objek JavaScript, sehingga di browser dapat langsung diubah menjadi objek dengan `JSON.parse()` / `response.json()` tanpa parser XML/DOM yang lebih rumit. Selain itu, JSON mendukung tipe data dasar (string, angka, boolean, null, array, object) secara native, dan didukung hampir semua bahasa pemrograman serta framework modern (termasuk REST API dan framework frontend seperti React), sehingga menjadi format standar pertukaran data antara frontend dan backend. XML masih dipakai untuk kasus tertentu (dokumen dengan atribut/namespace, sistem lama), tetapi untuk aplikasi web modern JSON lebih praktis.
+3. Ketika browser meminta `/api/achievements/`, Django mencocokkan URL tersebut di `main/urls.py` dan memanggil view `get_achievements_json`. View mengambil data dari database dengan `Achievement.objects.all()` (opsional difilter dengan parameter `?name=`), lalu mengubahnya menjadi string JSON dengan `serializers.serialize("json", queryset)`, dan mengembalikannya lewat `HttpResponse(..., content_type="application/json")`. Pada halaman `/achievements/`, view `show_achievements` memakai JSON tersebut, lalu mendeserialisasinya kembali dengan `serializers.deserialize("json", ...)` menjadi objek model untuk dirender di template. Serialization diperlukan karena QuerySet dan instance model adalah objek Python yang tidak dapat dikirim melalui HTTP; HTTP hanya mengirim teks/byte. Serializer mengubah objek tersebut menjadi format teks yang standar dan dapat dibaca oleh klien mana pun (termasuk yang tidak memakai Python), serta menangani tipe data khusus seperti UUID dan tanggal yang bukan tipe bawaan JSON.
+
+**Fitur Tugas 3:**
+- Semua template (`index.html`, `experience.html`, `achievements.html`, `achievement_form.html`) memakai `{% extends "base.html" %}`.
+- Achievement: create (`/achievements/add/`), update (`/achievements/<id>/edit/`), delete (tombol dengan konfirmasi modal, method POST), dan JSON (`/api/achievements/`, mendukung filter `?name=`).
+- Experience juga tersedia dalam JSON di `/api/experience/`.
+- `AchievementForm` (`main/forms.py`) memiliki field `name`, `issuer` (teks), `year` (angka), dan `description` (teks panjang, opsional).
+- Setelah menambah/mengubah/menghapus data, muncul pesan sukses di bagian atas halaman.
+
+**Cara menjalankan:**
+```
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+python manage.py test
+```
+
+AI DISCLOSURE
+Saya menggunakan Gemini untuk membantu saya dalam pengerjaan Tugas Individu 3. Saya meminta AI untuk menjelaskan alur tugas secara step-by-step dan bertanya ketika ada bagian materi Form & Data Delivery yang saya tidak mengerti. Secara spesifik, saya menggunakan AI untuk memahami cara kerja `ModelForm` di Django, alur serialization dan deserialization data ke format JSON, serta logika di dalam views untuk fungsi Create, Update, dan Delete.

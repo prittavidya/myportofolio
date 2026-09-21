@@ -1,17 +1,22 @@
 {% extends "base.html" %}
 
 {% block meta %}
-    <title>Add Achievement - {{ name }}</title>
+    <title>{% if is_edit %}Edit{% else %}Add{% endif %} Achievement - {{ name }}</title>
 {% endblock meta %}
 
 {% block content %}
 <main>
     <section class="experience-section">
         <div class="container">
-            <h1>Add New Achievement</h1>
-            
-        <form method="post" action="{% url 'main:create_achievement' %}" class="achievement-form">                  {% csrf_token %}
-                
+            <h1>{% if is_edit %}Edit Achievement{% else %}Add New Achievement{% endif %}</h1>
+
+            {% if is_edit %}
+                <form method="post" action="{% url 'main:edit_achievement' achievement.id %}" class="achievement-form">
+            {% else %}
+                <form method="post" action="{% url 'main:create_achievement' %}" class="achievement-form">
+            {% endif %}
+                {% csrf_token %}
+
                 {% for field in form %}
                     <div class="form-group">
                         <label for="{{ field.id_for_label }}">{{ field.label }}</label>
@@ -21,11 +26,12 @@
                         {% endfor %}
                     </div>
                 {% endfor %}
-                
-                <button type="submit" class="button">Tambah Achievement</button>
+
+                <button type="submit" class="button">
+                    {% if is_edit %}Simpan Perubahan{% else %}Tambah Achievement{% endif %}
+                </button>
                 <a href="{% url 'main:show_achievements' %}" class="button button-secondary">Batal</a>
             </form>
-            
         </div>
     </section>
 </main>
