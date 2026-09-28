@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.contrib.auth.models import User
 
 
 class Experience(models.Model):
@@ -33,6 +34,9 @@ class Achievement(models.Model):
     issuer = models.CharField(max_length=255)
     year = models.IntegerField()
     description = models.TextField(blank=True)
+    starred_by = models.ManyToManyField(
+        User, related_name="starred_achievements", blank=True
+    )
 
     def __str__(self):
         return self.name
