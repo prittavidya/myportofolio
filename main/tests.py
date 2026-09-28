@@ -1,7 +1,7 @@
 import json
 import uuid
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
@@ -302,13 +302,113 @@ class AuthAndAuthorizationTest(TestCase):
 
     def test_star_via_get_does_not_change_data(self):
         self.client.force_login(self.user)
-        self.client.get(reverse("main:toggle_star", args=[self.achievement.id]))
+        response = self.client.get(reverse("main:toggle_star", args=[self.achievement.id]))
 
+        self.assertEqual(response.status_code, 405)
         self.assertFalse(self.achievement.starred_by.exists())
 
-    def test_json_uses_usernames_for_stars(self):
-        self.achievement.starred_by.add(self.user)
-        data = json.loads(self.client.get(reverse("main:get_achievements_json")).content)
+    def test_star_is_limited_to_one_per_user(self):
+        other = User.objects.create_user("budi", password="budi-pass-123")
+        url = reverse("main:toggle_star", args=[self.achievement.id])
+        self.client.force_login(self.user)
+        self.client.post(url)
+        self.client.force_login(other)
+        self.client.post(url)
 
-        self.assertEqual(data[0]["fields"]["starred_by"], [["sasha"]])
-        self.assertContains(self.client.get(reverse("main:show_achievements")), "Unstar", count=0)
+        self.assertEqual(self.achievement.starred_by.count(), 2)
+        response = self.client.get(reverse("main:show_achievements"))
+        self.assertContains(response, "Unstar")
+        self.assertContains(response, '<span class="star-count">2</span>', html=True)
+
+    def test_star_redirects_back_to_safe_next_only(self):
+        self.client.force_login(self.user)
+        url = reverse("main:toggle_star", args=[self.achievement.id])
+        detail = reverse("main:show_achievement_detail", args=[self.achievement.id])
+
+        self.assertRedirects(self.client.post(url, {"next": detail}), detail)
+        response = self.client.post(url, {"next": "https://evil.example.com/"})
+        self.assertRedirects(response, reverse("main:show_achievements"))
+
+    def test_anonymous_sees_login_prompt_instead_of_star_form(self):
+        response = self.client.get(reverse("main:show_achievements"))
+
+        self.assertContains(response, "Login untuk Star")
+        self.assertNotContains(response, "Tambah Achievement")
+        self.assertNotContains(response, "Edit Pencapaian")
+
+    def test_login_redirects_to_next(self):
+        response = self.client.post(
+            reverse("main:login") + "?next=/achievements/",
+            {"username": "sasha", "password": self.password, "next": "/achievements/"},
+        )
+
+        self.assertRedirects(response, reverse("main:show_achievements"))
+
+    def test_json_does_not_leak_starring_users(self):
+        self.achievement.starred_by.add(self.user)
+        response = self.client.get(reverse("main:get_achievements_json"))
+        fields = json.loads(response.content)[0]["fields"]
+
+        self.assertNotIn("starred_by", fields)
+        self.assertNotContains(response, "sasha")
+        self.assertEqual(set(fields), {"name", "issuer", "year", "description"})
+
+    def test_detail_page_is_public(self):
+        url = reverse("main:show_achievement_detail", args=[self.achievement.id])
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "achievement_detail.html")
+        self.assertContains(response, "Juara 1 Hackathon")
+        self.assertEqual(
+            self.client.get(reverse("main:show_achievement_detail", args=[uuid.uuid4()])).status_code,
+            404,
+        )
+
+
+class EditorRoleTest(TestCase):
+    def setUp(self):
+        self.achievement = Achievement.objects.create(
+            name="Juara 1 Hackathon", issuer="Fasilkom UI", year=2026
+        )
+        self.editor = User.objects.create_user("edi", password="edi-pass-123")
+        # Grup Editor dibuat oleh migrasi 0007_create_editor_group
+        self.editor.groups.add(Group.objects.get(name="Editor"))
+        self.client.force_login(self.editor)
+
+    def test_editor_group_has_change_permission_only(self):
+        codenames = set(
+            Group.objects.get(name="Editor").permissions.values_list("codename", flat=True)
+        )
+
+        self.assertEqual(codenames, {"view_achievement", "change_achievement"})
+
+    def test_editor_can_edit(self):
+        url = reverse("main:edit_achievement", args=[self.achievement.id])
+        response = self.client.post(url, {
+            "name": "Juara 2 Hackathon", "issuer": "Fasilkom UI", "year": 2026, "description": "",
+        })
+
+        self.assertRedirects(response, reverse("main:show_achievements"))
+        self.achievement.refresh_from_db()
+        self.assertEqual(self.achievement.name, "Juara 2 Hackathon")
+
+    def test_editor_cannot_create_or_delete(self):
+        self.assertEqual(self.client.get(reverse("main:create_achievement")).status_code, 403)
+        response = self.client.post(reverse("main:delete_achievement", args=[self.achievement.id]))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Achievement.objects.exists())
+
+    def test_editor_can_star(self):
+        self.client.post(reverse("main:toggle_star", args=[self.achievement.id]))
+
+        self.assertIn(self.editor, self.achievement.starred_by.all())
+
+    def test_editor_sees_only_edit_control(self):
+        response = self.client.get(reverse("main:show_achievements"))
+
+        self.assertContains(response, "Edit Pencapaian")
+        self.assertNotContains(response, "Tambah Achievement")
+        self.assertNotContains(response, "Hapus Pencapaian")
+        self.assertContains(response, "role-badge\">Editor")

@@ -12,7 +12,7 @@
 
             <div class="project-header">
                 <h1>Achievements</h1>
-                {% if user.is_superuser %}
+                {% if can_manage_achievement %}
                 <a href="{% url 'main:create_achievement' %}" class="button project-add-button">
                     <span aria-hidden="true">+</span> Tambah Achievement
                 </a>
@@ -31,7 +31,7 @@
                     <span class="experience-category">
                         {{ achievement.year }}
                     </span>
-                    <h2>{{ achievement.name }}</h2>
+                    <h2><a href="{% url 'main:show_achievement_detail' achievement.id %}" class="card-title-link">{{ achievement.name }}</a></h2>
                     <p class="experience-description">
                         Diberikan oleh: {{ achievement.issuer }}
                     </p>
@@ -41,11 +41,13 @@
 
                     <div class="project-card-actions">
                         {% include "components/achievement_star.html" with achievement=achievement %}
-                        {% if user.is_superuser %}
+                        {% if can_edit_achievement %}
                         <div class="project-actions">
                             <a href="{% url 'main:edit_achievement' achievement.id %}"
                                 class="button button-secondary">Edit Pencapaian</a>
                         </div>
+                        {% endif %}
+                        {% if can_manage_achievement %}
                         {% include "components/achievement_delete_modal.html" with achievement=achievement %}
                         {% endif %}
                     </div>
