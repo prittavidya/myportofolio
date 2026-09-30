@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.core import serializers
 from django.db.models import Count
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -20,7 +20,7 @@ from main.roles import (
 )
 
 # Field yang aman dipublikasikan lewat API. `starred_by` sengaja tidak disertakan
-# agar daftar akun pengguna tidak bocor ke publik.
+# agar daftar akun pengguna tidak bocor ke publik (API hanya memberi jumlah star).
 ACHIEVEMENT_PUBLIC_FIELDS = ("name", "issuer", "year", "description")
 
 
@@ -64,13 +64,11 @@ def get_starred_ids(user):
 
 
 def show_achievements(request):
-    achievements, name_query = filter_achievements(request)
+    # Daftar achievement diambil oleh JavaScript lewat get_achievements_json (AJAX)
     context = {
         "name": "Joanna",
-        # Jumlah star dihitung sekali lewat satu query, bukan per kartu di template
-        "achievements": achievements.annotate(star_count=Count("starred_by")),
-        "starred_ids": get_starred_ids(request.user),
-        "name_query": name_query,
+        "name_query": request.GET.get("name", "").strip(),
+        "form": AchievementForm(),
     }
     return render(request, "achievements.html", context)
 
@@ -136,12 +134,43 @@ def delete_achievement(request, achievement_id):
     return redirect("main:show_achievements")
 
 
-def get_achievements_json(request):
-    achievements, _ = filter_achievements(request)
-    achievements_json = serializers.serialize(
-        "json", achievements, fields=ACHIEVEMENT_PUBLIC_FIELDS
+@require_POST
+def create_achievement_ajax(request):
+    # Balas JSON (bukan redirect ke login) agar fetch() di browser bisa membaca status
+    if not request.user.is_authenticated:
+        return JsonResponse({"message": "Silakan login terlebih dahulu."}, status=401)
+    if not can_create_or_delete_achievement(request.user):
+        return JsonResponse({"message": "Kamu tidak berhak menambah achievement."}, status=403)
+
+    form = AchievementForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse(
+            {"message": "Periksa kembali isian form.", "errors": form.errors},
+            status=400,
+        )
+
+    achievement = form.save()
+    return JsonResponse(
+        {"message": "Achievement baru berhasil ditambahkan!", "pk": str(achievement.id)},
+        status=201,
     )
-    return HttpResponse(achievements_json, content_type="application/json")
+
+
+def serialize_achievement(achievement, starred_ids):
+    fields = {field: getattr(achievement, field) for field in ACHIEVEMENT_PUBLIC_FIELDS}
+    fields["star_count"] = achievement.star_count
+    fields["is_starred"] = achievement.id in starred_ids
+    return {"model": "main.achievement", "pk": str(achievement.id), "fields": fields}
+
+
+def get_achievements_json(request):
+    # JSON dirakit manual (bukan serializers.serialize) agar bisa menyertakan
+    # jumlah star dan status star milik pengguna yang sedang login.
+    achievements, _ = filter_achievements(request)
+    achievements = achievements.annotate(star_count=Count("starred_by"))
+    starred_ids = get_starred_ids(request.user)
+    data = [serialize_achievement(achievement, starred_ids) for achievement in achievements]
+    return JsonResponse(data, safe=False)
 
 
 def get_experience_json(request):
