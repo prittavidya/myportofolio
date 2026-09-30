@@ -521,3 +521,29 @@ class AjaxAndToastTest(TestCase):
         response = self.client.get(reverse("main:show_achievements"))
 
         self.assertContains(response, "function escapeHtml")
+
+    def test_flash_messages_are_passed_to_toast(self):
+        self.client.force_login(self.owner)
+        achievement = Achievement.objects.create(name="Lomba", issuer="UI", year=2026)
+        response = self.client.post(
+            reverse("main:delete_achievement", args=[achievement.id]), follow=True
+        )
+
+        self.assertContains(response, 'id="django-messages"')
+        self.assertContains(response, "Achievement berhasil dihapus!")
+
+    def test_flash_message_is_escaped_in_json(self):
+        from django.contrib.messages import constants
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.template.loader import render_to_string
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/")
+        request.user = self.owner
+        request.session = self.client.session
+        storage = FallbackStorage(request)
+        request._messages = storage
+        storage.add(constants.SUCCESS, '</script><script>alert(1)</script>')
+        html = render_to_string("base.html", request=request)
+
+        self.assertNotIn("<script>alert(1)</script>", html)

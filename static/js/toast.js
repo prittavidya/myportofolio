@@ -41,3 +41,27 @@ function showToast(title, message, type = 'normal', duration = 3000) {
         toastTimer = setTimeout(() => toastComponent.hidePopover(), 300);
     }, duration);
 }
+
+// Tampilkan pesan flash Django (setelah redirect hapus/edit/register) sebagai toast
+function showDjangoMessages() {
+    const dataElement = document.getElementById('django-messages');
+    if (!dataElement) return;
+
+    let messages = [];
+    try {
+        messages = JSON.parse(dataElement.textContent);
+    } catch (error) {
+        console.error('Gagal membaca pesan Django:', error);
+        return;
+    }
+    if (messages.length === 0) return;
+
+    const isError = messages.some(message => message.tags.includes('error'));
+    showToast(
+        isError ? 'Gagal' : 'Berhasil',
+        messages.map(message => message.text).join(' '),
+        isError ? 'error' : 'success',
+    );
+}
+
+showDjangoMessages();

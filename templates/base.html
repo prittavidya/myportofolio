@@ -29,11 +29,15 @@
         </div>
     </header>
     {% if messages %}
-        <div class="container messages">
-            {% for message in messages %}
-                <p class="message message-{{ message.tags }}" role="status">{{ message }}</p>
-            {% endfor %}
-        </div>
+        {# Pesan flash Django ditampilkan sebagai toast; <noscript> jadi fallback tanpa JavaScript #}
+        <noscript>
+            <div class="container messages">
+                {% for message in messages %}
+                    <p class="message message-{{ message.tags }}" role="status">{{ message }}</p>
+                {% endfor %}
+            </div>
+        </noscript>
+        <script id="django-messages" type="application/json">[{% for message in messages %}{"text": "{{ message|escapejs }}", "tags": "{{ message.tags|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
     {% endif %}
     {% block content %} {% endblock content %}
 
