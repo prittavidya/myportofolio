@@ -1,6 +1,6 @@
 /**
  * Halaman Achievements: daftar via AJAX, pencarian dengan debouncing,
- * tambah data lewat modal + Fetch API, dan modal hapus bersama.
+ * tambah data lewat modal + Fetch API, serta star dan hapus tanpa reload.
  *
  * Konfigurasi (URL dan peran) dibaca dari atribut data-* pada #achievements-app
  * sehingga berkas ini tidak bergantung pada tag template Django.
@@ -63,7 +63,8 @@
 
         const starred = achievement.is_starred === true;
         return `
-            <form method="post" action="${escapeHtml(urlFor(config.starUrl, id))}" class="star-form">
+            <form method="post" action="${escapeHtml(urlFor(config.starUrl, id))}"
+                  class="star-form js-star-form" data-id="${escapeHtml(id)}">
                 <input type="hidden" name="csrfmiddlewaretoken" value="${escapeHtml(getCookie('csrftoken'))}">
                 <input type="hidden" name="next" value="${escapeHtml(currentPageUrl())}">
                 <button type="submit"
@@ -230,17 +231,11 @@
         submitButton.disabled = true;
 
         try {
-            const response = await fetch(achievementForm.dataset.ajaxUrl, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken'),
-                },
-                body: new FormData(achievementForm),
-            });
-            const result = await response.json().catch(() => ({}));
+            const { ok, data: result } = await postForm(
+                achievementForm.dataset.ajaxUrl, new FormData(achievementForm),
+            );
 
-            if (!response.ok) {
+            if (!ok) {
                 const errors = result.errors || {};
                 showFormErrors(errors);
                 const detail = summarizeErrors(errors);
@@ -273,18 +268,75 @@
         });
     }
 
-    // ---------- Modal hapus bersama (hanya ada untuk pemilik) ----------
+    // ---------- Star lewat AJAX (pengguna yang sudah login) ----------
 
+    // Kartu dibuat ulang setiap fetch, jadi listener dipasang sekali di grid (event delegation)
+    gridContainer.addEventListener('submit', async function (event) {
+        const starForm = event.target.closest('.js-star-form');
+        if (!starForm) return;
+        event.preventDefault();
+
+        const button = starForm.querySelector('button');
+        button.disabled = true; // cegah klik ganda selagi permintaan berjalan
+
+        try {
+            const { ok, data } = await postForm(starForm.action, new FormData(starForm));
+            if (!ok) {
+                showToast('Gagal', data.message || 'Star gagal diperbarui.', 'error');
+                button.disabled = false;
+                return;
+            }
+
+            // Ganti hanya form star pada kartu ini, lalu kembalikan fokus ke tombolnya
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = buildStarHtml(starForm.dataset.id, data);
+            const newForm = wrapper.firstElementChild;
+            starForm.replaceWith(newForm);
+            newForm.querySelector('button').focus();
+            showToast(data.is_starred ? 'Star diberikan' : 'Star dibatalkan', data.message, 'normal');
+        } catch (error) {
+            console.error('Error toggling star:', error);
+            showToast('Gagal', 'Tidak dapat terhubung ke server.', 'error');
+            button.disabled = false;
+        }
+    });
+
+    // ---------- Hapus lewat AJAX dengan modal bersama (hanya ada untuk pemilik) ----------
+
+    const deleteModal = document.getElementById('delete-achievement-modal');
     const deleteForm = document.getElementById('delete-achievement-form');
     const deleteName = document.getElementById('delete-achievement-name');
 
-    if (deleteForm && deleteName) {
-        // Event delegation: kartu dibuat ulang setiap fetch, jadi listener dipasang di grid
+    if (deleteModal && deleteForm && deleteName) {
+        // Isi modal sesuai kartu yang tombol hapusnya diklik
         gridContainer.addEventListener('click', function (event) {
             const button = event.target.closest('.js-delete-achievement');
             if (!button) return;
             deleteForm.action = button.dataset.deleteUrl;
             deleteName.textContent = button.dataset.name;
+        });
+
+        deleteForm.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const submitButton = deleteForm.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+
+            try {
+                const { ok, data } = await postForm(deleteForm.action, new FormData(deleteForm));
+                if (!ok) {
+                    showToast('Gagal menghapus', data.message || 'Terjadi kesalahan pada server.', 'error');
+                    return;
+                }
+                deleteModal.hidePopover();
+                showToast('Berhasil', data.message, 'success');
+                // Muat ulang daftar agar kondisi kosong tampil jika kartu terakhir dihapus
+                fetchAchievements(searchInput.value.trim());
+            } catch (error) {
+                console.error('Error deleting achievement:', error);
+                showToast('Gagal menghapus', 'Tidak dapat terhubung ke server.', 'error');
+            } finally {
+                submitButton.disabled = false;
+            }
         });
     }
 

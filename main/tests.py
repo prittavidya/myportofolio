@@ -534,7 +534,8 @@ class AjaxAndToastTest(TestCase):
 
         self.assertIn("function escapeHtml", utils_js)
         self.assertIn("function getCookie", utils_js)
-        self.assertIn("'X-CSRFToken': getCookie('csrftoken')", page_js)
+        self.assertIn("'X-CSRFToken': getCookie('csrftoken')", utils_js)
+        self.assertIn("postForm(", page_js)
 
     def test_achievements_page_sets_csrf_cookie_for_every_role(self):
         # Pengunjung & pengguna biasa tidak melihat form, tetapi JS tetap butuh cookie
@@ -579,3 +580,71 @@ class AjaxAndToastTest(TestCase):
         html = render_to_string("base.html", request=request)
 
         self.assertNotIn("<script>alert(1)</script>", html)
+
+
+class AjaxStarAndDeleteTest(TestCase):
+    """Star dan hapus dari halaman daftar memakai URL yang sama, tetapi dibalas JSON."""
+
+    JSON = {"HTTP_ACCEPT": "application/json"}
+
+    def setUp(self):
+        self.achievement = Achievement.objects.create(
+            name="Juara 1 Hackathon", issuer="Fasilkom UI", year=2026
+        )
+        self.owner = User.objects.create_superuser("owner", password="owner-pass-123")
+        self.user = User.objects.create_user("sasha", password="sasha-pass-123")
+        self.star_url = reverse("main:toggle_star", args=[self.achievement.id])
+        self.delete_url = reverse("main:delete_achievement", args=[self.achievement.id])
+
+    def test_star_via_ajax_returns_new_state(self):
+        self.client.force_login(self.user)
+
+        data = json.loads(self.client.post(self.star_url, **self.JSON).content)
+        self.assertTrue(data["is_starred"])
+        self.assertEqual(data["star_count"], 1)
+
+        data = json.loads(self.client.post(self.star_url, **self.JSON).content)
+        self.assertFalse(data["is_starred"])
+        self.assertEqual(data["star_count"], 0)
+
+    def test_star_via_ajax_anonymous_gets_json_401(self):
+        response = self.client.post(self.star_url, **self.JSON)
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response["Content-Type"], "application/json")
+
+    def test_star_via_ajax_requires_csrf(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.user)
+
+        self.assertEqual(client.post(self.star_url, **self.JSON).status_code, 403)
+        self.assertFalse(self.achievement.starred_by.exists())
+
+    def test_delete_via_ajax_returns_json(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.delete_url, **self.JSON)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Juara 1 Hackathon", json.loads(response.content)["message"])
+        self.assertFalse(Achievement.objects.exists())
+
+    def test_delete_via_ajax_forbidden_for_regular_user(self):
+        self.client.force_login(self.user)
+        response = self.client.post(self.delete_url, **self.JSON)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("message", json.loads(response.content))
+        self.assertTrue(Achievement.objects.exists())
+
+    def test_delete_via_ajax_anonymous_gets_json_401(self):
+        response = self.client.post(self.delete_url, **self.JSON)
+
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(Achievement.objects.exists())
+
+    def test_regular_form_post_still_redirects(self):
+        # Halaman detail dan fallback tanpa JavaScript tetap memakai redirect
+        self.client.force_login(self.owner)
+
+        self.assertRedirects(self.client.post(self.star_url), reverse("main:show_achievements"))
+        self.assertRedirects(self.client.post(self.delete_url), reverse("main:show_achievements"))

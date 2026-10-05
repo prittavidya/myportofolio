@@ -2,7 +2,6 @@ import datetime
 
 from django.contrib import messages
 from django.contrib.auth import login, logout
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.core import serializers
 from django.db.models import Count
@@ -17,7 +16,9 @@ from main.models import Achievement, Experience
 from main.roles import (
     can_create_or_delete_achievement,
     can_edit_achievement,
+    json_login_required,
     role_required,
+    wants_json,
 )
 
 # Field yang aman dipublikasikan lewat API. `starred_by` sengaja tidak disertakan
@@ -132,7 +133,10 @@ def delete_achievement(request, achievement_id):
     achievement = get_object_or_404(Achievement, pk=achievement_id)
 
     if request.method == "POST":
+        name = achievement.name
         achievement.delete()
+        if wants_json(request):
+            return JsonResponse({"message": f"{name} berhasil dihapus."})
         messages.success(request, "Achievement berhasil dihapus!")
 
     return redirect("main:show_achievements")
@@ -232,15 +236,26 @@ def logout_user(request):
     return response
 
 
-@login_required
+@json_login_required
 @require_POST
 def toggle_star(request, achievement_id):
-    """Memberi atau membatalkan star; M2M menjamin maksimal satu star per pengguna."""
+    """Memberi atau membatalkan star; M2M menjamin maksimal satu star per pengguna.
+
+    Permintaan AJAX dibalas JSON berisi status star terbaru agar kartu bisa
+    diperbarui tanpa reload; form biasa (halaman detail) tetap di-redirect.
+    """
     achievement = get_object_or_404(Achievement, pk=achievement_id)
 
-    if achievement.starred_by.filter(pk=request.user.pk).exists():
+    is_starred = achievement.starred_by.filter(pk=request.user.pk).exists()
+    if is_starred:
         achievement.starred_by.remove(request.user)
     else:
         achievement.starred_by.add(request.user)
 
+    if wants_json(request):
+        return JsonResponse({
+            "is_starred": not is_starred,
+            "star_count": achievement.starred_by.count(),
+            "message": "Star dibatalkan." if is_starred else f"Kamu memberi star pada {achievement.name}.",
+        })
     return redirect(safe_next_url(request, "main:show_achievements"))

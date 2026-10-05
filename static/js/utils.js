@@ -38,3 +38,21 @@ const DUMMY_ID = '00000000-0000-0000-0000-000000000000';
 function urlFor(template, id) {
     return template.replace(DUMMY_ID, encodeURIComponent(id));
 }
+
+/**
+ * Mengirim FormData lewat POST dengan header CSRF dan meminta balasan JSON.
+ * Mengembalikan { ok, status, data }; `data` berupa objek kosong jika server
+ * tidak membalas JSON (misalnya halaman error 500). Error jaringan tetap di-throw.
+ */
+async function postForm(url, formData) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok, status: response.status, data };
+}
