@@ -44,3 +44,44 @@ python manage.py test
 
 AI DISCLOSURE
 Saya menggunakan Gemini untuk membantu saya dalam pengerjaan Tugas Individu 3. Saya meminta AI untuk menjelaskan alur tugas secara step-by-step dan bertanya ketika ada bagian materi Form & Data Delivery yang saya tidak mengerti. Secara spesifik, saya menggunakan AI untuk memahami cara kerja `ModelForm` di Django, alur serialization dan deserialization data ke format JSON, serta logika di dalam views untuk fungsi Create, Update, dan Delete.
+
+### Tugas 4
+
+**Hak akses yang diterapkan (bagian Achievements):**
+
+| Peran | Baca daftar & detail | Star / Unstar | Ubah | Tambah & Hapus |
+|---|---|---|---|---|
+| Pengunjung (belum login) | ✅ | ➡️ diarahkan ke login | ➡️ diarahkan ke login | ➡️ diarahkan ke login |
+| Pengguna biasa | ✅ | ✅ | ❌ 403 | ❌ 403 |
+| Editor (grup `Editor`) | ✅ | ✅ | ✅ | ❌ 403 |
+| Pemilik (superuser) | ✅ | ✅ | ✅ | ✅ |
+
+**Fitur Tugas 4:**
+- **Autentikasi:** register, login, dan logout memakai `UserCreationForm`, `AuthenticationForm`, `login()`, dan `logout()` bawaan Django. Saat login, cookie `last_login` disimpan dan ditampilkan di halaman utama; saat logout cookie dihapus. Setelah login, pengguna dikembalikan ke halaman asal (`?next=`), dengan pengecekan `url_has_allowed_host_and_scheme` untuk mencegah *open redirect*.
+- **Peran Editor:** migrasi `0007_create_editor_group` otomatis membuat grup `Editor` yang hanya punya permission `view_achievement` dan `change_achievement`. Anggota grup ditetapkan lewat Django Admin (`/admin` → Users → pilih user → Groups → `Editor`).
+- **Pemeriksaan di sisi server:** aturan peran dikumpulkan di `main/roles.py`. Decorator `role_required(...)` memakai `@login_required` (redirect ke `/login/`) lalu memunculkan `PermissionDenied` (HTTP 403) jika peran tidak cukup. `create_achievement` dan `delete_achievement` hanya untuk superuser, sedangkan `edit_achievement` untuk superuser atau Editor.
+- **Menyembunyikan kontrol di template:** context processor `main.context_processors.user_roles` mengirim `can_edit_achievement`, `can_manage_achievement`, `is_editor`, dan `user_role` ke semua template. Tombol *Tambah*, *Edit*, dan *Hapus* hanya muncul untuk peran yang berhak. Navbar juga menampilkan badge peran pengguna.
+- **Star:** `Achievement.starred_by = ManyToManyField(User)`. View `toggle_star` hanya menerima POST (`@require_POST`, GET → 405) dengan `{% csrf_token %}`. Relasi M2M menjamin satu pengguna maksimal memberi satu star. Jumlah star dihitung dengan `annotate(Count("starred_by"))` dalam satu query. Status star pengguna ditampilkan sebagai tombol *Star*/*Unstar*, sedangkan pengunjung melihat tombol *Login untuk Star*.
+- **Halaman detail publik:** `/achievements/<id>/`.
+- **Keamanan API:** `/api/achievements/` hanya menyerialisasi field `name`, `issuer`, `year`, dan `description`. Field `starred_by` tidak disertakan agar username pemberi star tidak bocor. Tooltip tombol star juga tidak lagi menampilkan daftar username.
+
+**Cara mencoba peran:**
+```
+python manage.py migrate            # membuat tabel + grup Editor
+python manage.py createsuperuser    # akun pemilik portofolio
+python manage.py runserver
+```
+1. Daftar dua akun lewat `/register/`.
+2. Login ke `/admin` dengan superuser, lalu masukkan salah satu akun ke grup **Editor**.
+3. Login dengan setiap akun dan bandingkan tombol yang muncul di `/achievements/`.
+
+Semua skenario di atas juga dicakup oleh unit test (`python manage.py test`, 43 test), termasuk kelas `AuthAndAuthorizationTest` dan `EditorRoleTest`.
+
+AI DISCLOSURE
+Saya menggunakan Claude Code (Claude) untuk membantu melengkapi Tugas Individu 4. Saya memberikan deskripsi tugas lengkap dan meminta AI mengecek bagian yang belum terpenuhi dari kode yang sudah saya buat (autentikasi, cookie `last_login`, dan star). AI membantu pada bagian berikut:
+- menambahkan peran Editor (migrasi grup, `main/roles.py`, dan context processor),
+- memperbaiki endpoint JSON yang sebelumnya ikut mengirim username pemberi star,
+- membuat `toggle_star` hanya menerima POST dan menambahkan redirect `next` yang aman,
+- membuat halaman detail, serta menambah dan memperbarui unit test.
+
+Catatan: test lama (`test_json_uses_usernames_for_stars`) justru mengharapkan username ada di JSON. Test ini saya ganti dengan `test_json_does_not_leak_starring_users` karena bertentangan dengan syarat tidak membocorkan informasi sensitif. Hasil dari AI tidak langsung saya terima begitu saja. Saya juga tetap perlu memeriksa sendiri alur login, star, dan pembagian peran di browser.

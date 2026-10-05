@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block meta %}
+<title>{{ achievement.name }} - {{ name }}</title>
+{% endblock meta %}
+
+{% block content %}
+<main>
+    <section class="experience-section">
+        <div class="container">
+            <a href="{% url 'main:show_achievements' %}" class="back-link">&larr; Kembali ke Achievements</a>
+
+            <article class="experience-card achievement-detail">
+                <span class="experience-category">{{ achievement.year }}</span>
+                <h1>{{ achievement.name }}</h1>
+                <p class="experience-description">Diberikan oleh: {{ achievement.issuer }}</p>
+                {% if achievement.description %}
+                <p class="experience-description">{{ achievement.description|linebreaksbr }}</p>
+                {% endif %}
+
+                <div class="project-card-actions">
+                    {% include "components/achievement_star.html" with achievement=achievement %}
+                    {% if can_edit_achievement %}
+                    <div class="project-actions">
+                        <a href="{% url 'main:edit_achievement' achievement.id %}"
+                            class="button button-secondary">Edit Pencapaian</a>
+                    </div>
+                    {% endif %}
+                    {% if can_manage_achievement %}
+                    {% include "components/achievement_delete_modal.html" with achievement=achievement %}
+                    {% endif %}
+                </div>
+            </article>
+        </div>
+    </section>
+</main>
+{% endblock content %}

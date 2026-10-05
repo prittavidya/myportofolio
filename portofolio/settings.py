@@ -71,6 +71,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'main.context_processors.user_roles',
             ],
         },
     },
@@ -157,3 +158,6 @@ MAILERS = {
 
 # Ganti dengan URL PWS kamu, gunakan https://
 CSRF_TRUSTED_ORIGINS = ["https://joanna-prittavidya-myportofolio.pws.cs.ui.ac.id"]
+
+# Pengunjung tanpa login diarahkan ke sini oleh @login_required
+LOGIN_URL = 'main:login'

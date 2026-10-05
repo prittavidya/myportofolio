@@ -1,0 +1,48 @@
+<div id="add-achievement-modal"
+     class="achievement-form-modal"
+     popover="auto"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="add-achievement-modal-title">
+    <button type="button"
+            class="achievement-form-modal__backdrop"
+            popovertarget="add-achievement-modal"
+            popovertargetaction="hide"
+            aria-label="Tutup form tambah achievement"></button>
+
+    <div class="achievement-form-modal__content">
+        <button type="button"
+                class="achievement-form-modal__close"
+                popovertarget="add-achievement-modal"
+                popovertargetaction="hide"
+                aria-label="Tutup form tambah achievement">×</button>
+
+        <h2 id="add-achievement-modal-title">Tambah Achievement Baru</h2>
+        {# action = fallback tanpa JavaScript; data-ajax-url dipakai oleh fetch() #}
+        <form id="achievement-form"
+              method="post"
+              action="{% url 'main:create_achievement' %}"
+              data-ajax-url="{% url 'main:create_achievement_ajax' %}"
+              class="achievement-form">
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="form-group">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    <div data-errors-for="{{ field.name }}">
+                        {% for error in field.errors %}
+                            <p class="form-error">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+            <div class="achievement-form-modal__actions">
+                <button type="button"
+                        class="button button-secondary"
+                        popovertarget="add-achievement-modal"
+                        popovertargetaction="hide">Batal</button>
+                <button type="submit" class="button">Tambah Achievement</button>
+            </div>
+        </form>
+    </div>
+</div>

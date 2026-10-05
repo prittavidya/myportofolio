@@ -1,7 +1,7 @@
 import json
 import uuid
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
@@ -78,8 +78,8 @@ class AchievementTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Belum ada achievement yang ditambahkan.")
 
-    def test_achievement_data_is_rendered(self):
-        """Test apakah data achievement muncul di halaman HTML ketika ada data"""
+    def test_achievement_data_is_loaded_via_ajax(self):
+        """Halaman hanya memuat kerangka; data achievement diambil dari endpoint JSON"""
         Achievement.objects.create(
             name="Juara 1 Hackathon",
             issuer="Fasilkom UI",
@@ -87,10 +87,17 @@ class AchievementTest(TestCase):
         )
         response = self.client.get(reverse('main:show_achievements'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Juara 1 Hackathon")
-        self.assertContains(response, "Fasilkom UI")
-        self.assertContains(response, "2026")
-        self.assertNotContains(response, "Belum ada achievement yang ditambahkan.")
+        self.assertNotContains(response, "Juara 1 Hackathon")
+        self.assertContains(response, reverse('main:get_achievements_json'))
+
+        data = json.loads(self.client.get(reverse('main:get_achievements_json')).content)
+        self.assertEqual(data[0]["fields"]["name"], "Juara 1 Hackathon")
+        self.assertEqual(data[0]["fields"]["issuer"], "Fasilkom UI")
+        self.assertEqual(data[0]["fields"]["year"], 2026)
+
+    def test_search_query_is_prefilled(self):
+        response = self.client.get(reverse('main:show_achievements'), {"name": "hackathon"})
+        self.assertContains(response, 'value="hackathon"')
 
 
 class AchievementFormAndApiTest(TestCase):
@@ -280,16 +287,21 @@ class AuthAndAuthorizationTest(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse("main:show_achievements"))
 
+        # Kartu dirakit JavaScript, jadi yang diuji adalah flag peran dan modal di halaman
         self.assertNotContains(response, "Tambah Achievement")
-        self.assertNotContains(response, "Hapus Pencapaian")
-        self.assertContains(response, "button-star")
+        self.assertNotContains(response, 'id="add-achievement-modal"')
+        self.assertNotContains(response, 'id="delete-achievement-modal"')
+        self.assertContains(response, 'data-is-authenticated="true"')
+        self.assertContains(response, 'data-can-manage="false"')
 
     def test_owner_sees_controls(self):
         self.client.force_login(self.owner)
         response = self.client.get(reverse("main:show_achievements"))
 
         self.assertContains(response, "Tambah Achievement")
-        self.assertContains(response, "Hapus Pencapaian")
+        self.assertContains(response, 'id="add-achievement-modal"')
+        self.assertContains(response, 'id="delete-achievement-modal"')
+        self.assertContains(response, 'data-can-manage="true"')
 
     def test_toggle_star_adds_and_removes(self):
         self.client.force_login(self.user)
@@ -302,13 +314,337 @@ class AuthAndAuthorizationTest(TestCase):
 
     def test_star_via_get_does_not_change_data(self):
         self.client.force_login(self.user)
-        self.client.get(reverse("main:toggle_star", args=[self.achievement.id]))
+        response = self.client.get(reverse("main:toggle_star", args=[self.achievement.id]))
 
+        self.assertEqual(response.status_code, 405)
         self.assertFalse(self.achievement.starred_by.exists())
 
-    def test_json_uses_usernames_for_stars(self):
-        self.achievement.starred_by.add(self.user)
-        data = json.loads(self.client.get(reverse("main:get_achievements_json")).content)
+    def test_star_is_limited_to_one_per_user(self):
+        other = User.objects.create_user("budi", password="budi-pass-123")
+        url = reverse("main:toggle_star", args=[self.achievement.id])
+        self.client.force_login(self.user)
+        self.client.post(url)
+        self.client.force_login(other)
+        self.client.post(url)
 
-        self.assertEqual(data[0]["fields"]["starred_by"], [["sasha"]])
-        self.assertContains(self.client.get(reverse("main:show_achievements")), "Unstar", count=0)
+        self.assertEqual(self.achievement.starred_by.count(), 2)
+        response = self.client.get(reverse("main:get_achievements_json"))
+        fields = json.loads(response.content)[0]["fields"]
+        self.assertEqual(fields["star_count"], 2)
+        self.assertTrue(fields["is_starred"])
+
+    def test_star_redirects_back_to_safe_next_only(self):
+        self.client.force_login(self.user)
+        url = reverse("main:toggle_star", args=[self.achievement.id])
+        detail = reverse("main:show_achievement_detail", args=[self.achievement.id])
+
+        self.assertRedirects(self.client.post(url, {"next": detail}), detail)
+        response = self.client.post(url, {"next": "https://evil.example.com/"})
+        self.assertRedirects(response, reverse("main:show_achievements"))
+
+    def test_anonymous_sees_login_prompt_instead_of_star_form(self):
+        response = self.client.get(reverse("main:show_achievements"))
+
+        self.assertContains(response, 'data-is-authenticated="false"')
+        self.assertContains(response, 'data-can-edit="false"')
+        self.assertNotContains(response, "Tambah Achievement")
+
+        self.achievement.starred_by.add(self.user)
+        fields = json.loads(self.client.get(reverse("main:get_achievements_json")).content)[0]["fields"]
+        self.assertFalse(fields["is_starred"])
+        self.assertEqual(fields["star_count"], 1)
+
+    def test_login_redirects_to_next(self):
+        response = self.client.post(
+            reverse("main:login") + "?next=/achievements/",
+            {"username": "sasha", "password": self.password, "next": "/achievements/"},
+        )
+
+        self.assertRedirects(response, reverse("main:show_achievements"))
+
+    def test_json_does_not_leak_starring_users(self):
+        self.achievement.starred_by.add(self.user)
+        response = self.client.get(reverse("main:get_achievements_json"))
+        fields = json.loads(response.content)[0]["fields"]
+
+        self.assertNotIn("starred_by", fields)
+        self.assertNotContains(response, "sasha")
+        self.assertEqual(
+            set(fields),
+            {"name", "issuer", "year", "description", "star_count", "is_starred"},
+        )
+
+    def test_detail_page_is_public(self):
+        url = reverse("main:show_achievement_detail", args=[self.achievement.id])
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "achievement_detail.html")
+        self.assertContains(response, "Juara 1 Hackathon")
+        self.assertEqual(
+            self.client.get(reverse("main:show_achievement_detail", args=[uuid.uuid4()])).status_code,
+            404,
+        )
+
+
+class EditorRoleTest(TestCase):
+    def setUp(self):
+        self.achievement = Achievement.objects.create(
+            name="Juara 1 Hackathon", issuer="Fasilkom UI", year=2026
+        )
+        self.editor = User.objects.create_user("edi", password="edi-pass-123")
+        # Grup Editor dibuat oleh migrasi 0007_create_editor_group
+        self.editor.groups.add(Group.objects.get(name="Editor"))
+        self.client.force_login(self.editor)
+
+    def test_editor_group_has_change_permission_only(self):
+        codenames = set(
+            Group.objects.get(name="Editor").permissions.values_list("codename", flat=True)
+        )
+
+        self.assertEqual(codenames, {"view_achievement", "change_achievement"})
+
+    def test_editor_can_edit(self):
+        url = reverse("main:edit_achievement", args=[self.achievement.id])
+        response = self.client.post(url, {
+            "name": "Juara 2 Hackathon", "issuer": "Fasilkom UI", "year": 2026, "description": "",
+        })
+
+        self.assertRedirects(response, reverse("main:show_achievements"))
+        self.achievement.refresh_from_db()
+        self.assertEqual(self.achievement.name, "Juara 2 Hackathon")
+
+    def test_editor_cannot_create_or_delete(self):
+        self.assertEqual(self.client.get(reverse("main:create_achievement")).status_code, 403)
+        response = self.client.post(reverse("main:delete_achievement", args=[self.achievement.id]))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Achievement.objects.exists())
+
+    def test_editor_can_star(self):
+        self.client.post(reverse("main:toggle_star", args=[self.achievement.id]))
+
+        self.assertIn(self.editor, self.achievement.starred_by.all())
+
+    def test_editor_sees_only_edit_control(self):
+        response = self.client.get(reverse("main:show_achievements"))
+
+        self.assertContains(response, 'data-can-edit="true"')
+        self.assertContains(response, 'data-can-manage="false"')
+        self.assertNotContains(response, "Tambah Achievement")
+        self.assertNotContains(response, 'id="delete-achievement-modal"')
+        self.assertContains(response, "role-badge\">Editor")
+
+    def test_editor_cannot_create_via_ajax(self):
+        response = self.client.post(reverse("main:create_achievement_ajax"), {
+            "name": "Lomba", "issuer": "UI", "year": 2026, "description": "",
+        })
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Achievement.objects.count(), 1)
+
+
+class AjaxAndToastTest(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_superuser("owner", password="owner-pass-123")
+        self.user = User.objects.create_user("sasha", password="sasha-pass-123")
+        self.url = reverse("main:create_achievement_ajax")
+        self.valid_data = {
+            "name": "Dean's List", "issuer": "Universitas Indonesia", "year": 2025, "description": "",
+        }
+
+    def test_toast_component_is_on_every_page(self):
+        response = self.client.get(reverse("main:show_main"))
+
+        self.assertContains(response, 'id="toast-component"')
+        self.assertContains(response, "js/toast.js")
+
+    def test_owner_creates_achievement_via_ajax(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.url, self.valid_data)
+        data = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 201)
+        achievement = Achievement.objects.get(name="Dean's List")
+        self.assertEqual(data["pk"], str(achievement.id))
+        self.assertIn("berhasil", data["message"])
+
+    def test_ajax_invalid_data_returns_field_errors(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.url, {**self.valid_data, "year": "bukan-angka"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("year", json.loads(response.content)["errors"])
+        self.assertFalse(Achievement.objects.exists())
+
+    def test_ajax_rejects_anonymous_and_regular_user_with_json(self):
+        response = self.client.post(self.url, self.valid_data)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response["Content-Type"], "application/json")
+
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.post(self.url, self.valid_data).status_code, 403)
+        self.assertFalse(Achievement.objects.exists())
+
+    def test_ajax_create_requires_post(self):
+        self.client.force_login(self.owner)
+
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_ajax_create_requires_csrf_token(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.owner)
+
+        self.assertEqual(client.post(self.url, self.valid_data).status_code, 403)
+        self.assertFalse(Achievement.objects.exists())
+
+    def test_html_tags_are_stripped_on_server(self):
+        self.client.force_login(self.owner)
+        self.client.post(self.url, {
+            **self.valid_data,
+            "name": "<script>alert('xss')</script>Lomba",
+            "description": "<img src=x onerror=alert(1)>Deskripsi",
+        })
+        achievement = Achievement.objects.get()
+
+        self.assertEqual(achievement.name, "alert('xss')Lomba")
+        self.assertEqual(achievement.description, "Deskripsi")
+
+    def test_name_with_only_tags_is_rejected(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.url, {**self.valid_data, "name": "<b></b>"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("name", json.loads(response.content)["errors"])
+
+    def test_page_loads_shared_and_page_scripts(self):
+        response = self.client.get(reverse("main:show_achievements"))
+
+        self.assertContains(response, "js/utils.js")
+        self.assertContains(response, "js/achievements.js")
+        self.assertNotContains(response, "function escapeHtml")  # tidak lagi inline
+
+    def test_static_scripts_escape_and_send_csrf(self):
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find("js/utils.js"), encoding="utf-8") as f:
+            utils_js = f.read()
+        with open(finders.find("js/achievements.js"), encoding="utf-8") as f:
+            page_js = f.read()
+
+        self.assertIn("function escapeHtml", utils_js)
+        self.assertIn("function getCookie", utils_js)
+        self.assertIn("'X-CSRFToken': getCookie('csrftoken')", utils_js)
+        self.assertIn("postForm(", page_js)
+
+    def test_achievements_page_sets_csrf_cookie_for_every_role(self):
+        # Pengunjung & pengguna biasa tidak melihat form, tetapi JS tetap butuh cookie
+        response = self.client.get(reverse("main:show_achievements"))
+        self.assertIn("csrftoken", response.cookies)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("main:show_achievements"))
+        self.assertIn("csrftoken", response.cookies)
+
+    def test_ajax_validation_errors_are_readable_messages(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.url, {**self.valid_data, "name": "", "year": "x"})
+        errors = json.loads(response.content)["errors"]
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(set(errors), {"name", "year"})
+        self.assertTrue(all(isinstance(m, str) for msgs in errors.values() for m in msgs))
+
+    def test_flash_messages_are_passed_to_toast(self):
+        self.client.force_login(self.owner)
+        achievement = Achievement.objects.create(name="Lomba", issuer="UI", year=2026)
+        response = self.client.post(
+            reverse("main:delete_achievement", args=[achievement.id]), follow=True
+        )
+
+        self.assertContains(response, 'id="django-messages"')
+        self.assertContains(response, "Achievement berhasil dihapus!")
+
+    def test_flash_message_is_escaped_in_json(self):
+        from django.contrib.messages import constants
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.template.loader import render_to_string
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/")
+        request.user = self.owner
+        request.session = self.client.session
+        storage = FallbackStorage(request)
+        request._messages = storage
+        storage.add(constants.SUCCESS, '</script><script>alert(1)</script>')
+        html = render_to_string("base.html", request=request)
+
+        self.assertNotIn("<script>alert(1)</script>", html)
+
+
+class AjaxStarAndDeleteTest(TestCase):
+    """Star dan hapus dari halaman daftar memakai URL yang sama, tetapi dibalas JSON."""
+
+    JSON = {"HTTP_ACCEPT": "application/json"}
+
+    def setUp(self):
+        self.achievement = Achievement.objects.create(
+            name="Juara 1 Hackathon", issuer="Fasilkom UI", year=2026
+        )
+        self.owner = User.objects.create_superuser("owner", password="owner-pass-123")
+        self.user = User.objects.create_user("sasha", password="sasha-pass-123")
+        self.star_url = reverse("main:toggle_star", args=[self.achievement.id])
+        self.delete_url = reverse("main:delete_achievement", args=[self.achievement.id])
+
+    def test_star_via_ajax_returns_new_state(self):
+        self.client.force_login(self.user)
+
+        data = json.loads(self.client.post(self.star_url, **self.JSON).content)
+        self.assertTrue(data["is_starred"])
+        self.assertEqual(data["star_count"], 1)
+
+        data = json.loads(self.client.post(self.star_url, **self.JSON).content)
+        self.assertFalse(data["is_starred"])
+        self.assertEqual(data["star_count"], 0)
+
+    def test_star_via_ajax_anonymous_gets_json_401(self):
+        response = self.client.post(self.star_url, **self.JSON)
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response["Content-Type"], "application/json")
+
+    def test_star_via_ajax_requires_csrf(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.user)
+
+        self.assertEqual(client.post(self.star_url, **self.JSON).status_code, 403)
+        self.assertFalse(self.achievement.starred_by.exists())
+
+    def test_delete_via_ajax_returns_json(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.delete_url, **self.JSON)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Juara 1 Hackathon", json.loads(response.content)["message"])
+        self.assertFalse(Achievement.objects.exists())
+
+    def test_delete_via_ajax_forbidden_for_regular_user(self):
+        self.client.force_login(self.user)
+        response = self.client.post(self.delete_url, **self.JSON)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("message", json.loads(response.content))
+        self.assertTrue(Achievement.objects.exists())
+
+    def test_delete_via_ajax_anonymous_gets_json_401(self):
+        response = self.client.post(self.delete_url, **self.JSON)
+
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(Achievement.objects.exists())
+
+    def test_regular_form_post_still_redirects(self):
+        # Halaman detail dan fallback tanpa JavaScript tetap memakai redirect
+        self.client.force_login(self.owner)
+
+        self.assertRedirects(self.client.post(self.star_url), reverse("main:show_achievements"))
+        self.assertRedirects(self.client.post(self.delete_url), reverse("main:show_achievements"))

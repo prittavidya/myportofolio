@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block meta %}
 <title>Achievements - {{ name }}</title>
@@ -6,59 +7,100 @@
 
 {% block content %}
 <main>
-    <section class="experience-section" id="achievements">
+    {# Konfigurasi untuk achievements.js; UUID dummy diganti ID asli di JavaScript #}
+    <section class="experience-section" id="achievements-app"
+             data-list-url="{% url 'main:get_achievements_json' %}"
+             data-detail-url="{% url 'main:show_achievement_detail' '00000000-0000-0000-0000-000000000000' %}"
+             data-edit-url="{% url 'main:edit_achievement' '00000000-0000-0000-0000-000000000000' %}"
+             data-star-url="{% url 'main:toggle_star' '00000000-0000-0000-0000-000000000000' %}"
+             data-delete-url="{% url 'main:delete_achievement' '00000000-0000-0000-0000-000000000000' %}"
+             data-login-url="{% url 'main:login' %}"
+             data-is-authenticated="{{ user.is_authenticated|yesno:'true,false' }}"
+             data-can-edit="{{ can_edit_achievement|yesno:'true,false' }}"
+             data-can-manage="{{ can_manage_achievement|yesno:'true,false' }}">
         <div class="container">
             <p class="section-kicker">Pencapaian saya sejauh ini</p>
 
             <div class="project-header">
                 <h1>Achievements</h1>
-                {% if user.is_superuser %}
-                <a href="{% url 'main:create_achievement' %}" class="button project-add-button">
+                {% if can_manage_achievement %}
+                <button type="button"
+                        class="button project-add-button"
+                        popovertarget="add-achievement-modal">
                     <span aria-hidden="true">+</span> Tambah Achievement
-                </a>
+                </button>
                 {% endif %}
             </div>
 
-            <form method="get" action="{% url 'main:show_achievements' %}" class="project-search">
-                <input type="search" name="name" value="{{ name_query }}" placeholder="Cari berdasarkan nama pencapaian"
-                    class="project-search__input" aria-label="Cari berdasarkan nama pencapaian">
+            <form id="achievement-search-form" class="project-search" role="search">
+                <input type="search"
+                       id="search-input"
+                       name="name"
+                       value="{{ name_query }}"
+                       placeholder="Cari berdasarkan nama pencapaian"
+                       class="project-search__input"
+                       aria-label="Cari berdasarkan nama pencapaian">
                 <button type="submit" class="button">Cari</button>
             </form>
 
-            <div class="experience-grid">
-                {% for achievement in achievements %}
-                <article class="experience-card">
-                    <span class="experience-category">
-                        {{ achievement.year }}
-                    </span>
-                    <h2>{{ achievement.name }}</h2>
-                    <p class="experience-description">
-                        Diberikan oleh: {{ achievement.issuer }}
-                    </p>
-                    {% if achievement.description %}
-                    <p class="experience-description">{{ achievement.description }}</p>
-                    {% endif %}
-
-                    <div class="project-card-actions">
-                        {% include "components/achievement_star.html" with achievement=achievement %}
-                        {% if user.is_superuser %}
-                        <div class="project-actions">
-                            <a href="{% url 'main:edit_achievement' achievement.id %}"
-                                class="button button-secondary">Edit Pencapaian</a>
-                        </div>
-                        {% include "components/achievement_delete_modal.html" with achievement=achievement %}
-                        {% endif %}
-                    </div>
-                </article>
-                {% empty %}
-                {% if name_query %}
-                <p class="empty-state">Tidak ada pencapaian dengan nama tersebut.</p>
-                {% else %}
-                <p class="empty-state">Belum ada achievement yang ditambahkan.</p>
-                {% endif %}
-                {% endfor %}
+            <!-- Loading State -->
+            <div id="loading" class="empty-state hide">
+                <p>Memuat achievements...</p>
             </div>
+
+            <!-- Error State -->
+            <div id="error" class="empty-state hide">
+                <p>Gagal memuat data achievements. Silakan coba lagi.</p>
+            </div>
+
+            <!-- Empty State (teksnya diganti JavaScript saat pencarian tidak menemukan hasil) -->
+            <div id="empty" class="empty-state hide">
+                <p id="empty-message">Belum ada achievement yang ditambahkan.</p>
+            </div>
+
+            <!-- Achievement Grid -->
+            <div id="grid" class="experience-grid hide" aria-live="polite"></div>
         </div>
     </section>
 </main>
+
+{% if can_manage_achievement %}
+    {% include "components/achievement_form_modal.html" %}
+
+    {# Satu modal hapus dipakai bersama; nama & action form diisi JavaScript #}
+    <div id="delete-achievement-modal"
+         class="project-delete-modal"
+         popover="auto"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="delete-achievement-title">
+        <button type="button"
+                class="project-delete-modal__backdrop"
+                popovertarget="delete-achievement-modal"
+                popovertargetaction="hide"
+                aria-label="Tutup konfirmasi hapus"></button>
+        <div class="project-delete-modal__content">
+            <button type="button"
+                    class="project-delete-modal__close"
+                    popovertarget="delete-achievement-modal"
+                    popovertargetaction="hide"
+                    aria-label="Tutup konfirmasi hapus">×</button>
+            <h2 id="delete-achievement-title">Hapus Pencapaian?</h2>
+            <p>Apakah Anda yakin ingin menghapus <strong id="delete-achievement-name"></strong>?</p>
+            <div class="project-delete-modal__actions">
+                <button type="button"
+                        class="button button-secondary"
+                        popovertarget="delete-achievement-modal"
+                        popovertargetaction="hide">Batal</button>
+                <form id="delete-achievement-form" method="post" action="">
+                    {% csrf_token %}
+                    <button type="submit" class="button button-danger">Ya, Hapus</button>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+{# Logika halaman ada di static/js/achievements.js; defer = jalan setelah HTML & toast.js siap #}
+<script src="{% static 'js/achievements.js' %}" defer></script>
 {% endblock content %}
