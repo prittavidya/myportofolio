@@ -9,6 +9,7 @@ from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
 from main.forms import AchievementForm
@@ -63,8 +64,11 @@ def get_starred_ids(user):
     return set(user.starred_achievements.values_list("id", flat=True))
 
 
+@ensure_csrf_cookie
 def show_achievements(request):
-    # Daftar achievement diambil oleh JavaScript lewat get_achievements_json (AJAX)
+    # Daftar achievement diambil oleh JavaScript lewat get_achievements_json (AJAX).
+    # ensure_csrf_cookie: cookie csrftoken selalu dikirim agar getCookie() di JS
+    # bisa membacanya, termasuk untuk pengguna yang tidak melihat form apa pun.
     context = {
         "name": "Joanna",
         "name_query": request.GET.get("name", "").strip(),

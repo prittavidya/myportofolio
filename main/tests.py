@@ -291,8 +291,8 @@ class AuthAndAuthorizationTest(TestCase):
         self.assertNotContains(response, "Tambah Achievement")
         self.assertNotContains(response, 'id="add-achievement-modal"')
         self.assertNotContains(response, 'id="delete-achievement-modal"')
-        self.assertContains(response, 'IS_AUTHENTICATED = "true"')
-        self.assertContains(response, 'CAN_MANAGE = "false"')
+        self.assertContains(response, 'data-is-authenticated="true"')
+        self.assertContains(response, 'data-can-manage="false"')
 
     def test_owner_sees_controls(self):
         self.client.force_login(self.owner)
@@ -301,7 +301,7 @@ class AuthAndAuthorizationTest(TestCase):
         self.assertContains(response, "Tambah Achievement")
         self.assertContains(response, 'id="add-achievement-modal"')
         self.assertContains(response, 'id="delete-achievement-modal"')
-        self.assertContains(response, 'CAN_MANAGE = "true"')
+        self.assertContains(response, 'data-can-manage="true"')
 
     def test_toggle_star_adds_and_removes(self):
         self.client.force_login(self.user)
@@ -345,8 +345,8 @@ class AuthAndAuthorizationTest(TestCase):
     def test_anonymous_sees_login_prompt_instead_of_star_form(self):
         response = self.client.get(reverse("main:show_achievements"))
 
-        self.assertContains(response, 'IS_AUTHENTICATED = "false"')
-        self.assertContains(response, 'CAN_EDIT = "false"')
+        self.assertContains(response, 'data-is-authenticated="false"')
+        self.assertContains(response, 'data-can-edit="false"')
         self.assertNotContains(response, "Tambah Achievement")
 
         self.achievement.starred_by.add(self.user)
@@ -429,8 +429,8 @@ class EditorRoleTest(TestCase):
     def test_editor_sees_only_edit_control(self):
         response = self.client.get(reverse("main:show_achievements"))
 
-        self.assertContains(response, 'CAN_EDIT = "true"')
-        self.assertContains(response, 'CAN_MANAGE = "false"')
+        self.assertContains(response, 'data-can-edit="true"')
+        self.assertContains(response, 'data-can-manage="false"')
         self.assertNotContains(response, "Tambah Achievement")
         self.assertNotContains(response, 'id="delete-achievement-modal"')
         self.assertContains(response, "role-badge\">Editor")
@@ -517,10 +517,42 @@ class AjaxAndToastTest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("name", json.loads(response.content)["errors"])
 
-    def test_page_escapes_output_in_javascript(self):
+    def test_page_loads_shared_and_page_scripts(self):
         response = self.client.get(reverse("main:show_achievements"))
 
-        self.assertContains(response, "function escapeHtml")
+        self.assertContains(response, "js/utils.js")
+        self.assertContains(response, "js/achievements.js")
+        self.assertNotContains(response, "function escapeHtml")  # tidak lagi inline
+
+    def test_static_scripts_escape_and_send_csrf(self):
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find("js/utils.js"), encoding="utf-8") as f:
+            utils_js = f.read()
+        with open(finders.find("js/achievements.js"), encoding="utf-8") as f:
+            page_js = f.read()
+
+        self.assertIn("function escapeHtml", utils_js)
+        self.assertIn("function getCookie", utils_js)
+        self.assertIn("'X-CSRFToken': getCookie('csrftoken')", page_js)
+
+    def test_achievements_page_sets_csrf_cookie_for_every_role(self):
+        # Pengunjung & pengguna biasa tidak melihat form, tetapi JS tetap butuh cookie
+        response = self.client.get(reverse("main:show_achievements"))
+        self.assertIn("csrftoken", response.cookies)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("main:show_achievements"))
+        self.assertIn("csrftoken", response.cookies)
+
+    def test_ajax_validation_errors_are_readable_messages(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(self.url, {**self.valid_data, "name": "", "year": "x"})
+        errors = json.loads(response.content)["errors"]
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(set(errors), {"name", "year"})
+        self.assertTrue(all(isinstance(m, str) for msgs in errors.values() for m in msgs))
 
     def test_flash_messages_are_passed_to_toast(self):
         self.client.force_login(self.owner)

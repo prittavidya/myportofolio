@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block meta %}
 <title>Achievements - {{ name }}</title>
@@ -6,7 +7,17 @@
 
 {% block content %}
 <main>
-    <section class="experience-section" id="achievements">
+    {# Konfigurasi untuk achievements.js; UUID dummy diganti ID asli di JavaScript #}
+    <section class="experience-section" id="achievements-app"
+             data-list-url="{% url 'main:get_achievements_json' %}"
+             data-detail-url="{% url 'main:show_achievement_detail' '00000000-0000-0000-0000-000000000000' %}"
+             data-edit-url="{% url 'main:edit_achievement' '00000000-0000-0000-0000-000000000000' %}"
+             data-star-url="{% url 'main:toggle_star' '00000000-0000-0000-0000-000000000000' %}"
+             data-delete-url="{% url 'main:delete_achievement' '00000000-0000-0000-0000-000000000000' %}"
+             data-login-url="{% url 'main:login' %}"
+             data-is-authenticated="{{ user.is_authenticated|yesno:'true,false' }}"
+             data-can-edit="{{ can_edit_achievement|yesno:'true,false' }}"
+             data-can-manage="{{ can_manage_achievement|yesno:'true,false' }}">
         <div class="container">
             <p class="section-kicker">Pencapaian saya sejauh ini</p>
 
@@ -90,260 +101,6 @@
     </div>
 {% endif %}
 
-<script>
-// Konfigurasi
-const BASE_ACHIEVEMENTS_ENDPOINT = "{% url 'main:get_achievements_json' %}";
-const IS_AUTHENTICATED = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
-const CAN_EDIT = "{{ can_edit_achievement|yesno:'true,false' }}" === "true";
-const CAN_MANAGE = "{{ can_manage_achievement|yesno:'true,false' }}" === "true";
-const CSRF_TOKEN = "{{ csrf_token }}";
-const LOGIN_URL = "{% url 'main:login' %}";
-
-// Dummy UUID digantikan oleh ID asli dari data JSON
-const DUMMY_ID = "00000000-0000-0000-0000-000000000000";
-const DETAIL_URL = "{% url 'main:show_achievement_detail' '00000000-0000-0000-0000-000000000000' %}";
-const EDIT_URL = "{% url 'main:edit_achievement' '00000000-0000-0000-0000-000000000000' %}";
-const STAR_URL = "{% url 'main:toggle_star' '00000000-0000-0000-0000-000000000000' %}";
-const DELETE_URL = "{% url 'main:delete_achievement' '00000000-0000-0000-0000-000000000000' %}";
-
-let achievementsAbortController;
-
-// Elemen DOM
-const loadingState = document.getElementById('loading');
-const errorState = document.getElementById('error');
-const emptyState = document.getElementById('empty');
-const emptyMessage = document.getElementById('empty-message');
-const gridContainer = document.getElementById('grid');
-const searchForm = document.getElementById('achievement-search-form');
-const searchInput = document.getElementById('search-input');
-const SEARCH_DEBOUNCE_DELAY = 300;
-let searchDebounceTimer;
-
-// Mengubah karakter khusus HTML menjadi entity agar data dari server
-// ditampilkan sebagai teks biasa, bukan dieksekusi sebagai HTML/JavaScript (XSS).
-function escapeHtml(value) {
-    return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
-}
-
-function urlFor(template, id) {
-    return template.replace(DUMMY_ID, encodeURIComponent(id));
-}
-
-function currentPageUrl() {
-    return window.location.pathname + window.location.search;
-}
-
-// Menyembunyikan/Menampilkan section halaman
-function displayPageSection({ showLoading = false, showError = false, showEmpty = false, showGrid = false }) {
-    loadingState.classList.toggle('hide', !showLoading);
-    errorState.classList.toggle('hide', !showError);
-    emptyState.classList.toggle('hide', !showEmpty);
-    gridContainer.classList.toggle('hide', !showGrid);
-}
-
-function buildStarHtml(id, achievement) {
-    const count = Number(achievement.star_count) || 0;
-
-    if (!IS_AUTHENTICATED) {
-        const loginUrl = `${LOGIN_URL}?next=${encodeURIComponent(currentPageUrl())}`;
-        return `
-            <a href="${escapeHtml(loginUrl)}" class="button button-star" title="Login untuk memberi star">
-                <span aria-hidden="true">☆</span> Login untuk Star
-                <span class="star-count">${count}</span>
-            </a>`;
-    }
-
-    const starred = achievement.is_starred === true;
-    return `
-        <form method="post" action="${escapeHtml(urlFor(STAR_URL, id))}" class="star-form">
-            <input type="hidden" name="csrfmiddlewaretoken" value="${escapeHtml(CSRF_TOKEN)}">
-            <input type="hidden" name="next" value="${escapeHtml(currentPageUrl())}">
-            <button type="submit"
-                    class="button button-star${starred ? ' is-starred' : ''}"
-                    aria-pressed="${starred}"
-                    title="${starred ? 'Batalkan star' : 'Beri star'}">
-                <span aria-hidden="true">${starred ? '★' : '☆'}</span> ${starred ? 'Unstar' : 'Star'}
-                <span class="star-count">${count}</span>
-            </button>
-        </form>`;
-}
-
-// Membuat elemen card achievement
-function buildAchievementCardElement(item) {
-    const achievement = item.fields;
-    const id = item.pk;
-
-    const articleElement = document.createElement('article');
-    articleElement.className = 'experience-card';
-
-    const descriptionHtml = achievement.description
-        ? `<p class="experience-description">${escapeHtml(achievement.description)}</p>`
-        : '';
-
-    const editHtml = CAN_EDIT
-        ? `<div class="project-actions">
-               <a href="${escapeHtml(urlFor(EDIT_URL, id))}" class="button button-secondary">Edit Pencapaian</a>
-           </div>`
-        : '';
-
-    const deleteHtml = CAN_MANAGE
-        ? `<div class="project-actions">
-               <p class="experience-status">
-                   <button type="button"
-                           class="button button-danger js-delete-achievement"
-                           popovertarget="delete-achievement-modal"
-                           data-delete-url="${escapeHtml(urlFor(DELETE_URL, id))}"
-                           data-name="${escapeHtml(achievement.name)}"
-                           aria-label="Hapus ${escapeHtml(achievement.name)}"
-                           title="Hapus pencapaian">Hapus Pencapaian</button>
-               </p>
-           </div>`
-        : '';
-
-    articleElement.innerHTML = `
-        <span class="experience-category">${escapeHtml(achievement.year)}</span>
-        <h2><a href="${escapeHtml(urlFor(DETAIL_URL, id))}" class="card-title-link">${escapeHtml(achievement.name)}</a></h2>
-        <p class="experience-description">Diberikan oleh: ${escapeHtml(achievement.issuer)}</p>
-        ${descriptionHtml}
-        <div class="project-card-actions">
-            ${buildStarHtml(id, achievement)}
-            ${editHtml}
-            ${deleteHtml}
-        </div>
-    `;
-    return articleElement;
-}
-
-// Fetch data achievement
-async function fetchAchievements(searchQuery = "") {
-    if (achievementsAbortController) achievementsAbortController.abort();
-    achievementsAbortController = new AbortController();
-
-    try {
-        displayPageSection({ showLoading: true });
-
-        const url = searchQuery
-            ? `${BASE_ACHIEVEMENTS_ENDPOINT}?name=${encodeURIComponent(searchQuery)}`
-            : BASE_ACHIEVEMENTS_ENDPOINT;
-
-        const response = await fetch(url, {
-            headers: { 'Accept': 'application/json' },
-            signal: achievementsAbortController.signal,
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch data');
-
-        const achievementData = await response.json();
-
-        if (achievementData.length === 0) {
-            emptyMessage.textContent = searchQuery
-                ? 'Tidak ada pencapaian dengan nama tersebut.'
-                : 'Belum ada achievement yang ditambahkan.';
-            displayPageSection({ showEmpty: true });
-        } else {
-            gridContainer.replaceChildren(...achievementData.map(buildAchievementCardElement));
-            displayPageSection({ showGrid: true });
-        }
-    } catch (error) {
-        if (error.name === 'AbortError') return;
-        console.error('Error loading achievements:', error);
-        displayPageSection({ showError: true });
-    }
-}
-
-// Pencarian: simpan kata kunci di URL (?name=) agar bisa di-refresh/dibagikan
-function searchAchievements() {
-    const query = searchInput.value.trim();
-    const newUrl = query ? `?name=${encodeURIComponent(query)}` : window.location.pathname;
-    history.replaceState(null, '', newUrl);
-    fetchAchievements(query);
-}
-
-searchInput.addEventListener('input', function () {
-    clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = setTimeout(searchAchievements, SEARCH_DEBOUNCE_DELAY);
-});
-
-searchForm.addEventListener('submit', function (event) {
-    event.preventDefault(); // Mencegah reload halaman
-    clearTimeout(searchDebounceTimer);
-    searchAchievements();
-});
-
-if (CAN_MANAGE) {
-    const achievementForm = document.getElementById('achievement-form');
-    const submitButton = achievementForm.querySelector('button[type="submit"]');
-    const deleteForm = document.getElementById('delete-achievement-form');
-    const deleteName = document.getElementById('delete-achievement-name');
-
-    function closeAchievementModal() {
-        document.getElementById('add-achievement-modal').hidePopover();
-    }
-
-    function clearFormErrors() {
-        achievementForm.querySelectorAll('[data-errors-for]').forEach(el => el.replaceChildren());
-    }
-
-    function showFormErrors(errors) {
-        Object.entries(errors).forEach(([field, messages]) => {
-            const container = achievementForm.querySelector(`[data-errors-for="${CSS.escape(field)}"]`);
-            if (!container) return;
-            messages.forEach(message => {
-                const p = document.createElement('p');
-                p.className = 'form-error';
-                p.textContent = message;
-                container.appendChild(p);
-            });
-        });
-    }
-
-    // Tambah achievement lewat AJAX tanpa reload halaman
-    achievementForm.addEventListener('submit', async function (event) {
-        event.preventDefault();
-        clearFormErrors();
-        submitButton.disabled = true;
-
-        try {
-            const response = await fetch(achievementForm.dataset.ajaxUrl, {
-                method: 'POST',
-                headers: { 'Accept': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
-                body: new FormData(achievementForm),
-            });
-            const result = await response.json().catch(() => ({}));
-
-            if (!response.ok) {
-                showFormErrors(result.errors || {});
-                showToast('Gagal menyimpan', result.message || 'Terjadi kesalahan pada server.', 'error');
-                return;
-            }
-
-            achievementForm.reset();
-            closeAchievementModal();
-            showToast('Berhasil', result.message, 'success');
-            fetchAchievements(searchInput.value.trim());
-        } catch (error) {
-            console.error('Error creating achievement:', error);
-            showToast('Gagal menyimpan', 'Tidak dapat terhubung ke server.', 'error');
-        } finally {
-            submitButton.disabled = false;
-        }
-    });
-
-    // Isi modal hapus bersama sesuai kartu yang tombolnya diklik
-    gridContainer.addEventListener('click', function (event) {
-        const button = event.target.closest('.js-delete-achievement');
-        if (!button) return;
-        deleteForm.action = button.dataset.deleteUrl;
-        deleteName.textContent = button.dataset.name;
-    });
-}
-
-// Start application
-fetchAchievements(searchInput.value.trim());
-</script>
+{# Logika halaman ada di static/js/achievements.js; defer = jalan setelah HTML & toast.js siap #}
+<script src="{% static 'js/achievements.js' %}" defer></script>
 {% endblock content %}
