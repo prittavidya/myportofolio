@@ -40,19 +40,21 @@ function urlFor(template, id) {
 }
 
 /**
- * Mengirim FormData lewat POST dengan header CSRF dan meminta balasan JSON.
- * Mengembalikan { ok, status, data }; `data` berupa objek kosong jika server
- * tidak membalas JSON (misalnya halaman error 500). Error jaringan tetap di-throw.
+ * Mengirim permintaan tulis ke API DRF (POST/PUT/PATCH/DELETE) dengan body JSON,
+ * header CSRF, dan meminta balasan JSON. Mengembalikan { ok, status, data }; `data`
+ * berupa objek kosong untuk 204 No Content atau jika server tidak membalas JSON
+ * (misalnya halaman error 500). Error jaringan tetap di-throw.
  */
-async function postForm(url, formData) {
+async function sendJson(url, method, payload) {
     const response = await fetch(url, {
-        method: 'POST',
+        method,
         headers: {
             'Accept': 'application/json',
+            'Content-Type': 'application/json',
             'X-CSRFToken': getCookie('csrftoken'),
         },
-        body: formData,
+        body: payload === undefined ? undefined : JSON.stringify(payload),
     });
-    const data = await response.json().catch(() => ({}));
+    const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
     return { ok: response.ok, status: response.status, data };
 }

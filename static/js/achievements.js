@@ -13,9 +13,9 @@
     const config = {
         listUrl: app.dataset.listUrl,
         detailUrl: app.dataset.detailUrl,
+        apiDetailUrl: app.dataset.apiDetailUrl,
         editUrl: app.dataset.editUrl,
         starUrl: app.dataset.starUrl,
-        deleteUrl: app.dataset.deleteUrl,
         loginUrl: app.dataset.loginUrl,
         isAuthenticated: app.dataset.isAuthenticated === 'true',
         canEdit: app.dataset.canEdit === 'true',
@@ -49,7 +49,7 @@
 
     // ---------- Render kartu ----------
 
-    function buildStarHtml(id, achievement) {
+    function buildStarHtml(achievement) {
         const count = Number(achievement.star_count) || 0;
 
         if (!config.isAuthenticated) {
@@ -63,10 +63,7 @@
 
         const starred = achievement.is_starred === true;
         return `
-            <form method="post" action="${escapeHtml(urlFor(config.starUrl, id))}"
-                  class="star-form js-star-form" data-id="${escapeHtml(id)}">
-                <input type="hidden" name="csrfmiddlewaretoken" value="${escapeHtml(getCookie('csrftoken'))}">
-                <input type="hidden" name="next" value="${escapeHtml(currentPageUrl())}">
+            <form class="star-form js-star-form" data-star-url="${escapeHtml(urlFor(config.starUrl, achievement.id))}">
                 <button type="submit"
                         class="button button-star${starred ? ' is-starred' : ''}"
                         aria-pressed="${starred}"
@@ -77,9 +74,8 @@
             </form>`;
     }
 
-    function buildAchievementCardElement(item) {
-        const achievement = item.fields;
-        const id = item.pk;
+    function buildAchievementCardElement(achievement) {
+        const id = achievement.id;
 
         const articleElement = document.createElement('article');
         articleElement.className = 'experience-card';
@@ -100,7 +96,7 @@
                        <button type="button"
                                class="button button-danger js-delete-achievement"
                                popovertarget="delete-achievement-modal"
-                               data-delete-url="${escapeHtml(urlFor(config.deleteUrl, id))}"
+                               data-delete-url="${escapeHtml(urlFor(config.apiDetailUrl, id))}"
                                data-name="${escapeHtml(achievement.name)}"
                                aria-label="Hapus ${escapeHtml(achievement.name)}"
                                title="Hapus pencapaian">Hapus Pencapaian</button>
@@ -114,7 +110,7 @@
             <p class="experience-description">Diberikan oleh: ${escapeHtml(achievement.issuer)}</p>
             ${descriptionHtml}
             <div class="project-card-actions">
-                ${buildStarHtml(id, achievement)}
+                ${buildStarHtml(achievement)}
                 ${editHtml}
                 ${deleteHtml}
             </div>
@@ -218,7 +214,7 @@
         return Object.entries(errors)
             .map(([field, messages]) => {
                 const text = messages.join(' ');
-                return field === '__all__' ? text : `${fieldLabel(field)}: ${text}`;
+                return field === 'non_field_errors' ? text : `${fieldLabel(field)}: ${text}`;
             })
             .join(' ');
     }
@@ -231,17 +227,20 @@
         submitButton.disabled = true;
 
         try {
-            const { ok, data: result } = await postForm(
-                achievementForm.dataset.ajaxUrl, new FormData(achievementForm),
+            // Hanya field model yang dikirim, agar token CSRF di form tidak ikut jadi data
+            const fields = new FormData(achievementForm);
+            const payload = Object.fromEntries(
+                ['name', 'issuer', 'year', 'description'].map(name => [name, fields.get(name)]),
             );
+            const { ok, data } = await sendJson(achievementForm.dataset.ajaxUrl, 'POST', payload);
 
             if (!ok) {
-                const errors = result.errors || {};
+                // DRF membalas {"field": ["pesan"]} untuk validasi, {"detail": "pesan"} untuk error umum
+                const { detail, ...errors } = data;
                 showFormErrors(errors);
-                const detail = summarizeErrors(errors);
                 showToast(
                     'Gagal menyimpan',
-                    detail || result.message || 'Terjadi kesalahan pada server.',
+                    summarizeErrors(errors) || detail || 'Terjadi kesalahan pada server.',
                     'error',
                     5000,
                 );
@@ -250,7 +249,7 @@
 
             achievementForm.reset();
             addModal.hidePopover();
-            showToast('Berhasil', result.message, 'success');
+            showToast('Berhasil', 'Achievement baru berhasil ditambahkan!', 'success');
             fetchAchievements(searchInput.value.trim()); // perbarui daftar tanpa reload
         } catch (error) {
             console.error('Error creating achievement:', error);
@@ -280,20 +279,24 @@
         button.disabled = true; // cegah klik ganda selagi permintaan berjalan
 
         try {
-            const { ok, data } = await postForm(starForm.action, new FormData(starForm));
+            const { ok, data } = await sendJson(starForm.dataset.starUrl, 'POST');
             if (!ok) {
-                showToast('Gagal', data.message || 'Star gagal diperbarui.', 'error');
+                showToast('Gagal', data.detail || 'Star gagal diperbarui.', 'error');
                 button.disabled = false;
                 return;
             }
 
             // Ganti hanya form star pada kartu ini, lalu kembalikan fokus ke tombolnya
             const wrapper = document.createElement('div');
-            wrapper.innerHTML = buildStarHtml(starForm.dataset.id, data);
+            wrapper.innerHTML = buildStarHtml(data);
             const newForm = wrapper.firstElementChild;
             starForm.replaceWith(newForm);
             newForm.querySelector('button').focus();
-            showToast(data.is_starred ? 'Star diberikan' : 'Star dibatalkan', data.message, 'normal');
+            showToast(
+                data.is_starred ? 'Star diberikan' : 'Star dibatalkan',
+                data.is_starred ? `Kamu memberi star pada ${data.name}.` : 'Star dibatalkan.',
+                'normal',
+            );
         } catch (error) {
             console.error('Error toggling star:', error);
             showToast('Gagal', 'Tidak dapat terhubung ke server.', 'error');
@@ -312,7 +315,7 @@
         gridContainer.addEventListener('click', function (event) {
             const button = event.target.closest('.js-delete-achievement');
             if (!button) return;
-            deleteForm.action = button.dataset.deleteUrl;
+            deleteForm.dataset.deleteUrl = button.dataset.deleteUrl;
             deleteName.textContent = button.dataset.name;
         });
 
@@ -322,13 +325,13 @@
             submitButton.disabled = true;
 
             try {
-                const { ok, data } = await postForm(deleteForm.action, new FormData(deleteForm));
+                const { ok, data } = await sendJson(deleteForm.dataset.deleteUrl, 'DELETE');
                 if (!ok) {
-                    showToast('Gagal menghapus', data.message || 'Terjadi kesalahan pada server.', 'error');
+                    showToast('Gagal menghapus', data.detail || 'Terjadi kesalahan pada server.', 'error');
                     return;
                 }
                 deleteModal.hidePopover();
-                showToast('Berhasil', data.message, 'success');
+                showToast('Berhasil', `${deleteName.textContent} berhasil dihapus.`, 'success');
                 // Muat ulang daftar agar kondisi kosong tampil jika kartu terakhir dihapus
                 fetchAchievements(searchInput.value.trim());
             } catch (error) {

@@ -22,7 +22,7 @@
         <form id="achievement-form"
               method="post"
               action="{% url 'main:create_achievement' %}"
-              data-ajax-url="{% url 'main:create_achievement_ajax' %}"
+              data-ajax-url="{% url 'api:achievement-list' %}"
               class="achievement-form">
             {% csrf_token %}
             {% for field in form %}

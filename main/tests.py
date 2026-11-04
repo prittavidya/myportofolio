@@ -88,7 +88,7 @@ class AchievementTest(TestCase):
         response = self.client.get(reverse('main:show_achievements'))
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Juara 1 Hackathon")
-        self.assertContains(response, reverse('main:get_achievements_json'))
+        self.assertContains(response, reverse('api:achievement-list'))
 
         data = json.loads(self.client.get(reverse('main:get_achievements_json')).content)
         self.assertEqual(data[0]["fields"]["name"], "Juara 1 Hackathon")
@@ -535,7 +535,7 @@ class AjaxAndToastTest(TestCase):
         self.assertIn("function escapeHtml", utils_js)
         self.assertIn("function getCookie", utils_js)
         self.assertIn("'X-CSRFToken': getCookie('csrftoken')", utils_js)
-        self.assertIn("postForm(", page_js)
+        self.assertIn("sendJson(", page_js)
 
     def test_achievements_page_sets_csrf_cookie_for_every_role(self):
         # Pengunjung & pengguna biasa tidak melihat form, tetapi JS tetap butuh cookie

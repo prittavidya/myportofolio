@@ -9,11 +9,11 @@
 <main>
     {# Konfigurasi untuk achievements.js; UUID dummy diganti ID asli di JavaScript #}
     <section class="experience-section" id="achievements-app"
-             data-list-url="{% url 'main:get_achievements_json' %}"
+             data-list-url="{% url 'api:achievement-list' %}"
              data-detail-url="{% url 'main:show_achievement_detail' '00000000-0000-0000-0000-000000000000' %}"
+             data-api-detail-url="{% url 'api:achievement-detail' '00000000-0000-0000-0000-000000000000' %}"
              data-edit-url="{% url 'main:edit_achievement' '00000000-0000-0000-0000-000000000000' %}"
-             data-star-url="{% url 'main:toggle_star' '00000000-0000-0000-0000-000000000000' %}"
-             data-delete-url="{% url 'main:delete_achievement' '00000000-0000-0000-0000-000000000000' %}"
+             data-star-url="{% url 'api:achievement-star' '00000000-0000-0000-0000-000000000000' %}"
              data-login-url="{% url 'main:login' %}"
              data-is-authenticated="{{ user.is_authenticated|yesno:'true,false' }}"
              data-can-edit="{{ can_edit_achievement|yesno:'true,false' }}"
@@ -67,7 +67,7 @@
 {% if can_manage_achievement %}
     {% include "components/achievement_form_modal.html" %}
 
-    {# Satu modal hapus dipakai bersama; nama & action form diisi JavaScript #}
+    {# Satu modal hapus dipakai bersama; nama & URL hapus diisi JavaScript #}
     <div id="delete-achievement-modal"
          class="project-delete-modal"
          popover="auto"
@@ -92,8 +92,7 @@
                         class="button button-secondary"
                         popovertarget="delete-achievement-modal"
                         popovertargetaction="hide">Batal</button>
-                <form id="delete-achievement-form" method="post" action="">
-                    {% csrf_token %}
+                <form id="delete-achievement-form">
                     <button type="submit" class="button button-danger">Ya, Hapus</button>
                 </form>
             </div>
