@@ -85,3 +85,14 @@ Saya menggunakan Claude Code (Claude) untuk membantu melengkapi Tugas Individu 4
 - membuat halaman detail, serta menambah dan memperbarui unit test.
 
 Catatan: test lama (`test_json_uses_usernames_for_stars`) justru mengharapkan username ada di JSON. Test ini saya ganti dengan `test_json_does_not_leak_starring_users` karena bertentangan dengan syarat tidak membocorkan informasi sensitif. Hasil dari AI tidak langsung saya terima begitu saja. Saya juga tetap perlu memeriksa sendiri alur login, star, dan pembagian peran di browser.
+
+
+### Tugas 6
+
+1. REST adalah gaya arsitektur untuk API. Data dianggap sebagai resource yang punya URL sendiri, aksinya ditentukan oleh method HTTP (GET, POST, PUT, PATCH, DELETE), setiap request berdiri sendiri, dan hasilnya terlihat dari status code. Mengembalikan JSON saja belum cukup karena JSON hanya format datanya. Misalnya endpoint `/hapus-achievement/` yang menerima GET lalu selalu membalas 200 tetap mengembalikan JSON, tapi tidak RESTful. PUT mengganti seluruh data resource, sedangkan PATCH hanya mengubah field yang dikirim. Di halaman Achievements saya memakai PUT karena form edit selalu mengirim semua field. PATCH cocok kalau misalnya hanya deskripsinya yang ingin diubah.
+2. Serializer mengubah objek model menjadi JSON dan sebaliknya, sekaligus memvalidasi input. Dibandingkan merakit dictionary manual seperti `serialize_achievement` di Tugas 5, field cukup ditulis sekali di `fields`, validasi ada di `validate_<field>`, dan errornya otomatis jadi respons 400 per field. Field seperti `star_count` juga bisa dibuat read-only, jadi tidak bisa diisi dari request. Representasi datanya pun sama di semua endpoint.
+3. Autentikasi mencari tahu siapa yang mengirim request. Di proyek ini `SessionAuthentication` membaca session lalu mengisi `request.user`. Otorisasi menentukan apa yang boleh dilakukan user tersebut, dan itu tugas permission class seperti `IsPortfolioOwnerOrEditorOrReadOnly`. Menyembunyikan tombol hanya mengubah tampilan, karena orang tetap bisa mengirim request langsung lewat curl, Postman, atau console browser. Karena itu pemeriksaan yang sebenarnya harus ada di server.
+4. Browser otomatis mengirim cookie session ke situs kita, termasuk kalau request-nya dipicu dari situs lain. Tanpa token CSRF, situs jahat bisa membuat user yang sedang login mengirim request yang mengubah data. Situs lain tidak bisa membaca token kita, jadi header `X-CSRFToken` membuktikan request-nya berasal dari halaman kita sendiri. `force_authenticate` melewati proses autentikasi, termasuk `SessionAuthentication` yang menjalankan cek CSRF, sehingga request tetap lolos walaupun tanpa token. Untuk membuktikannya perlu `APIClient(enforce_csrf_checks=True)` dan `.login()`.
+
+AI DISCLOSURE
+Saya menggunakan Claude Code untuk membantu pengerjaan Tugas 6.
