@@ -108,6 +108,7 @@ class AchievementAPITest(APITestCase):
 
     def test_star_requires_login_and_toggles(self):
         self.assertEqual(self.client.post(self.star_url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.achievement.starred_by.count(), 0)
         self.client.force_authenticate(user=self.visitor)
         response = self.client.post(self.star_url)
         self.assertTrue(response.data["is_starred"])
@@ -115,6 +116,12 @@ class AchievementAPITest(APITestCase):
         response = self.client.post(self.star_url)
         self.assertFalse(response.data["is_starred"])
         self.assertEqual(response.data["star_count"], 0)
+
+    def test_star_always_uses_request_user(self):
+        self.client.force_authenticate(user=self.visitor)
+        response = self.client.post(self.star_url, {"user": self.owner.id}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list(self.achievement.starred_by.all()), [self.visitor])
 
     def test_computed_fields_are_read_only(self):
         self.client.force_authenticate(user=self.owner)
@@ -150,13 +157,18 @@ class AchievementAPITest(APITestCase):
         self.client.force_authenticate(user=self.editor)
         response = self.client.patch(self.detail_url, {"name": "Changed"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.achievement.refresh_from_db()
+        self.assertEqual(self.achievement.name, "Changed")
         response = self.client.put(self.detail_url, self.payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.achievement.refresh_from_db()
+        self.assertEqual(self.achievement.name, "Dean's List")
         response = self.client.post(self.list_url, self.payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         response = self.client.delete(self.detail_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(Achievement.objects.count(), 1)
+        self.assertTrue(Achievement.objects.filter(pk=self.achievement.id).exists())
 
     def test_editor_can_star(self):
         self.client.force_authenticate(user=self.editor)
@@ -170,6 +182,8 @@ class AchievementAPITest(APITestCase):
         self.client.force_authenticate(user=self.visitor)
         response = self.client.patch(self.detail_url, {"name": "Changed"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.achievement.refresh_from_db()
+        self.assertEqual(self.achievement.name, "Juara 1 Hackathon")
 
     def test_wrong_method(self):
         self.client.force_authenticate(user=self.owner)
@@ -182,6 +196,13 @@ class AchievementAPITest(APITestCase):
         response = client.post(self.list_url, self.payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(Achievement.objects.count(), 1)
+
+    def test_session_star_without_csrf_is_rejected(self):
+        client = APIClient(enforce_csrf_checks=True)
+        self.assertTrue(client.login(username="visitor", password="test-password"))
+        response = client.post(self.star_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.achievement.starred_by.count(), 0)
 
     def test_session_write_with_csrf_succeeds(self):
         client = APIClient(enforce_csrf_checks=True)
