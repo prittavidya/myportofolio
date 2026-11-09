@@ -1,23 +1,24 @@
-<div id="add-achievement-modal"
+<div id="achievement-form-modal"
      class="achievement-form-modal"
      popover="auto"
      role="dialog"
      aria-modal="true"
-     aria-labelledby="add-achievement-modal-title">
+     aria-labelledby="achievement-form-modal-title">
     <button type="button"
             class="achievement-form-modal__backdrop"
-            popovertarget="add-achievement-modal"
+            popovertarget="achievement-form-modal"
             popovertargetaction="hide"
-            aria-label="Tutup form tambah achievement"></button>
+            aria-label="Tutup form achievement"></button>
 
     <div class="achievement-form-modal__content">
         <button type="button"
                 class="achievement-form-modal__close"
-                popovertarget="add-achievement-modal"
+                popovertarget="achievement-form-modal"
                 popovertargetaction="hide"
-                aria-label="Tutup form tambah achievement">×</button>
+                aria-label="Tutup form achievement">×</button>
 
-        <h2 id="add-achievement-modal-title">Tambah Achievement Baru</h2>
+        <h2 id="achievement-form-modal-title">{% if can_manage_achievement %}Tambah Achievement Baru{% else %}Edit Achievement{% endif %}</h2>
+        {# Modal yang sama dipakai untuk tambah dan edit; mode diatur achievements.js #}
         {# action = fallback tanpa JavaScript; data-ajax-url dipakai oleh fetch() #}
         <form id="achievement-form"
               method="post"
@@ -39,9 +40,9 @@
             <div class="achievement-form-modal__actions">
                 <button type="button"
                         class="button button-secondary"
-                        popovertarget="add-achievement-modal"
+                        popovertarget="achievement-form-modal"
                         popovertargetaction="hide">Batal</button>
-                <button type="submit" class="button">Tambah Achievement</button>
+                <button type="submit" class="button">{% if can_manage_achievement %}Tambah Achievement{% else %}Simpan Perubahan{% endif %}</button>
             </div>
         </form>
     </div>

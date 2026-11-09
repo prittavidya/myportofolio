@@ -289,7 +289,7 @@ class AuthAndAuthorizationTest(TestCase):
 
         # Kartu dirakit JavaScript, jadi yang diuji adalah flag peran dan modal di halaman
         self.assertNotContains(response, "Tambah Achievement")
-        self.assertNotContains(response, 'id="add-achievement-modal"')
+        self.assertNotContains(response, 'id="achievement-form-modal"')
         self.assertNotContains(response, 'id="delete-achievement-modal"')
         self.assertContains(response, 'data-is-authenticated="true"')
         self.assertContains(response, 'data-can-manage="false"')
@@ -299,7 +299,7 @@ class AuthAndAuthorizationTest(TestCase):
         response = self.client.get(reverse("main:show_achievements"))
 
         self.assertContains(response, "Tambah Achievement")
-        self.assertContains(response, 'id="add-achievement-modal"')
+        self.assertContains(response, 'id="achievement-form-modal"')
         self.assertContains(response, 'id="delete-achievement-modal"')
         self.assertContains(response, 'data-can-manage="true"')
 
@@ -432,6 +432,7 @@ class EditorRoleTest(TestCase):
         self.assertContains(response, 'data-can-edit="true"')
         self.assertContains(response, 'data-can-manage="false"')
         self.assertNotContains(response, "Tambah Achievement")
+        self.assertContains(response, 'id="achievement-form-modal"')
         self.assertNotContains(response, 'id="delete-achievement-modal"')
         self.assertContains(response, "role-badge\">Editor")
 

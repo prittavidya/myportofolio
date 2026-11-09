@@ -12,7 +12,6 @@
              data-list-url="{% url 'api:achievement-list' %}"
              data-detail-url="{% url 'main:show_achievement_detail' '00000000-0000-0000-0000-000000000000' %}"
              data-api-detail-url="{% url 'api:achievement-detail' '00000000-0000-0000-0000-000000000000' %}"
-             data-edit-url="{% url 'main:edit_achievement' '00000000-0000-0000-0000-000000000000' %}"
              data-star-url="{% url 'api:achievement-star' '00000000-0000-0000-0000-000000000000' %}"
              data-login-url="{% url 'main:login' %}"
              data-is-authenticated="{{ user.is_authenticated|yesno:'true,false' }}"
@@ -26,7 +25,7 @@
                 {% if can_manage_achievement %}
                 <button type="button"
                         class="button project-add-button"
-                        popovertarget="add-achievement-modal">
+                        popovertarget="achievement-form-modal">
                     <span aria-hidden="true">+</span> Tambah Achievement
                 </button>
                 {% endif %}
@@ -64,9 +63,11 @@
     </section>
 </main>
 
-{% if can_manage_achievement %}
+{% if can_edit_achievement %}
     {% include "components/achievement_form_modal.html" %}
+{% endif %}
 
+{% if can_manage_achievement %}
     {# Satu modal hapus dipakai bersama; nama & URL hapus diisi JavaScript #}
     <div id="delete-achievement-modal"
          class="project-delete-modal"

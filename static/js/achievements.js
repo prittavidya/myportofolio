@@ -14,7 +14,6 @@
         listUrl: app.dataset.listUrl,
         detailUrl: app.dataset.detailUrl,
         apiDetailUrl: app.dataset.apiDetailUrl,
-        editUrl: app.dataset.editUrl,
         starUrl: app.dataset.starUrl,
         loginUrl: app.dataset.loginUrl,
         isAuthenticated: app.dataset.isAuthenticated === 'true',
@@ -23,8 +22,11 @@
     };
 
     const SEARCH_DEBOUNCE_DELAY = 300;
+    const EDITABLE_FIELDS = ['name', 'issuer', 'year', 'description'];
     let searchDebounceTimer;
     let achievementsAbortController;
+    // Data kartu yang sedang tampil, dipakai untuk mengisi form edit
+    let achievementsById = new Map();
 
     // Elemen DOM yang selalu ada untuk semua peran
     const loadingState = document.getElementById('loading');
@@ -86,7 +88,10 @@
 
         const editHtml = config.canEdit
             ? `<div class="project-actions">
-                   <a href="${escapeHtml(urlFor(config.editUrl, id))}" class="button button-secondary">Edit Pencapaian</a>
+                   <button type="button"
+                           class="button button-secondary js-edit-achievement"
+                           data-id="${escapeHtml(id)}"
+                           aria-label="Edit ${escapeHtml(achievement.name)}">Edit Pencapaian</button>
                </div>`
             : '';
 
@@ -141,6 +146,7 @@
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             const achievementData = await response.json();
+            achievementsById = new Map(achievementData.map(achievement => [achievement.id, achievement]));
 
             if (achievementData.length === 0) {
                 emptyMessage.textContent = searchQuery
@@ -179,12 +185,15 @@
         searchAchievements();
     });
 
-    // ---------- Tambah data (hanya ada untuk pemilik) ----------
+    // ---------- Tambah dan edit data (pemilik dan Editor) ----------
 
-    // Modal hanya dirender untuk pemilik, jadi cek dulu keberadaannya
+    // Modal hanya dirender untuk pemilik dan Editor, jadi cek dulu keberadaannya
     // agar skrip tidak berhenti di halaman pengguna lain.
     const achievementForm = document.getElementById('achievement-form');
-    const addModal = document.getElementById('add-achievement-modal');
+    const formModal = document.getElementById('achievement-form-modal');
+    const formModalTitle = document.getElementById('achievement-form-modal-title');
+    const formSubmitButton = achievementForm?.querySelector('button[type="submit"]');
+    let editingAchievementId = null; // null berarti form sedang dalam mode tambah
 
     function fieldLabel(field) {
         const label = achievementForm.querySelector(`label[for="id_${CSS.escape(field)}"]`);
@@ -219,20 +228,41 @@
             .join(' ');
     }
 
+    function openEditForm(achievement) {
+        editingAchievementId = achievement.id;
+        EDITABLE_FIELDS.forEach(field => {
+            achievementForm.elements.namedItem(field).value = achievement[field];
+        });
+        clearFormErrors();
+        formModalTitle.textContent = 'Edit Achievement';
+        formSubmitButton.textContent = 'Simpan Perubahan';
+        formModal.showPopover();
+    }
+
+    function resetToAddMode() {
+        editingAchievementId = null;
+        achievementForm.reset();
+        formModalTitle.textContent = 'Tambah Achievement Baru';
+        formSubmitButton.textContent = 'Tambah Achievement';
+    }
+
     async function submitAchievementForm(event) {
         event.preventDefault();
         clearFormErrors();
 
-        const submitButton = achievementForm.querySelector('button[type="submit"]');
-        submitButton.disabled = true;
+        // Edit memakai PUT karena form selalu mengirim semua field yang bisa diubah
+        const isEdit = editingAchievementId !== null;
+        const url = isEdit ? urlFor(config.apiDetailUrl, editingAchievementId) : achievementForm.dataset.ajaxUrl;
+
+        formSubmitButton.disabled = true;
 
         try {
             // Hanya field model yang dikirim, agar token CSRF di form tidak ikut jadi data
             const fields = new FormData(achievementForm);
             const payload = Object.fromEntries(
-                ['name', 'issuer', 'year', 'description'].map(name => [name, fields.get(name)]),
+                EDITABLE_FIELDS.map(name => [name, fields.get(name)]),
             );
-            const { ok, data } = await sendJson(achievementForm.dataset.ajaxUrl, 'POST', payload);
+            const { ok, data } = await sendJson(url, isEdit ? 'PUT' : 'POST', payload);
 
             if (!ok) {
                 // DRF membalas {"field": ["pesan"]} untuk validasi, {"detail": "pesan"} untuk error umum
@@ -247,23 +277,33 @@
                 return;
             }
 
-            achievementForm.reset();
-            addModal.hidePopover();
-            showToast('Berhasil', 'Achievement baru berhasil ditambahkan!', 'success');
+            if (!isEdit) achievementForm.reset();
+            formModal.hidePopover();
+            showToast(
+                'Berhasil',
+                isEdit ? 'Achievement berhasil diperbarui!' : 'Achievement baru berhasil ditambahkan!',
+                'success',
+            );
             fetchAchievements(searchInput.value.trim()); // perbarui daftar tanpa reload
         } catch (error) {
-            console.error('Error creating achievement:', error);
+            console.error('Error saving achievement:', error);
             showToast('Gagal menyimpan', 'Tidak dapat terhubung ke server.', 'error');
         } finally {
-            submitButton.disabled = false;
+            formSubmitButton.disabled = false;
         }
     }
 
-    if (achievementForm && addModal) {
+    if (achievementForm && formModal) {
         achievementForm.addEventListener('submit', submitAchievementForm);
         // Error lama dibersihkan saat modal ditutup agar form bersih ketika dibuka lagi
-        addModal.addEventListener('toggle', function (event) {
-            if (event.newState === 'closed') clearFormErrors();
+        formModal.addEventListener('toggle', function (event) {
+            if (event.newState !== 'closed') return;
+            clearFormErrors();
+            if (editingAchievementId !== null) resetToAddMode();
+        });
+        gridContainer.addEventListener('click', function (event) {
+            const button = event.target.closest('.js-edit-achievement');
+            if (button) openEditForm(achievementsById.get(button.dataset.id));
         });
     }
 
