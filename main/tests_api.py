@@ -48,13 +48,15 @@ class AchievementAPITest(APITestCase):
         self.assertEqual(self.client.get(url).status_code, status.HTTP_404_NOT_FOUND)
 
     def test_guest_and_visitor_cannot_write(self):
-        for user in (None, self.visitor):
+        # Tamu mendapat 401 karena TokenAuthentication (kelas autentikasi pertama)
+        # mengirim header WWW-Authenticate; pengguna login tanpa hak mendapat 403.
+        for user, expected in ((None, 401), (self.visitor, 403)):
             with self.subTest(user=user):
                 self.client.force_authenticate(user=user)
-                self.assertEqual(self.client.post(self.list_url, self.payload, format="json").status_code, 403)
-                self.assertEqual(self.client.patch(self.detail_url, {"name": "Changed"}, format="json").status_code, 403)
-                self.assertEqual(self.client.put(self.detail_url, self.payload, format="json").status_code, 403)
-                self.assertEqual(self.client.delete(self.detail_url).status_code, 403)
+                self.assertEqual(self.client.post(self.list_url, self.payload, format="json").status_code, expected)
+                self.assertEqual(self.client.patch(self.detail_url, {"name": "Changed"}, format="json").status_code, expected)
+                self.assertEqual(self.client.put(self.detail_url, self.payload, format="json").status_code, expected)
+                self.assertEqual(self.client.delete(self.detail_url).status_code, expected)
         self.assertEqual(Achievement.objects.count(), 1)
         self.achievement.refresh_from_db()
         self.assertEqual(self.achievement.name, "Juara 1 Hackathon")
@@ -107,7 +109,7 @@ class AchievementAPITest(APITestCase):
         self.assertFalse(Achievement.objects.filter(pk=self.achievement.id).exists())
 
     def test_star_requires_login_and_toggles(self):
-        self.assertEqual(self.client.post(self.star_url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.post(self.star_url).status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.achievement.starred_by.count(), 0)
         self.client.force_authenticate(user=self.visitor)
         response = self.client.post(self.star_url)

@@ -31,7 +31,8 @@ SECRET_KEY = 'django-insecure-meq&m7&kyja^aeao!y0(3q&way6qx&jx+atkqk(&2d%wg^hy6k
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "joanna-prittavidya-myportofolio.pws.cs.ui.ac.id"]
+# 10.0.2.2 adalah alamat komputer host jika diakses dari emulator Android
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.0.2.2", "joanna-prittavidya-myportofolio.pws.cs.ui.ac.id"]
 
 PRODUCTION = os.getenv('PRODUCTION', 'False').lower() == 'true'
 
@@ -44,11 +45,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'main',
     'rest_framework',
+    'rest_framework.authtoken',
 ]
 
 MIDDLEWARE = [
+    # CorsMiddleware harus berada sebelum CommonMiddleware
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -162,3 +167,24 @@ CSRF_TRUSTED_ORIGINS = ["https://joanna-prittavidya-myportofolio.pws.cs.ui.ac.id
 
 # Pengunjung tanpa login diarahkan ke sini oleh @login_required
 LOGIN_URL = 'main:login'
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        # TokenAuthentication di urutan pertama agar klien mobile memakai header
+        # `Authorization: Token <key>` dan mendapat 401 jika token tidak ada/salah.
+        # SessionAuthentication tetap dipakai halaman web (cookie + CSRF).
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+}
+
+# CORS untuk Flutter Web (Chrome). Saat pengembangan lokal (PRODUCTION=False)
+# semua origin diizinkan; di production hanya origin di CORS_ALLOWED_ORIGINS
+# (dipisah koma). Aplikasi Android native tidak memakai CORS.
+CORS_ALLOW_ALL_ORIGINS = not PRODUCTION
+if PRODUCTION:
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip()
+        for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
