@@ -3,6 +3,7 @@ import uuid
 from django.contrib.auth.models import Group, User
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient, APITestCase
 
 from main.models import Achievement
@@ -223,3 +224,75 @@ class AchievementAPITest(APITestCase):
         response = self.client.get(self.list_url, HTTP_ACCEPT="text/html")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("text/html", response["Content-Type"])
+
+
+class TokenAuthAPITest(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_superuser(
+            username="owner", password="test-password", email="owner@example.com",
+        )
+        self.visitor = User.objects.create_user(username="visitor", password="test-password")
+        self.token_url = reverse("api:api_token_auth")
+        self.logout_url = reverse("api:api_logout")
+        self.list_url = reverse("api:achievement-list")
+        self.payload = {
+            "name": "Dean's List", "issuer": "Universitas Indonesia",
+            "year": 2025, "description": "",
+        }
+
+    def _obtain_token(self, username="owner", password="test-password"):
+        return self.client.post(
+            self.token_url, {"username": username, "password": password}, format="json",
+        )
+
+    def test_obtain_token_with_valid_credentials(self):
+        response = self._obtain_token()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["token"], Token.objects.get(user=self.owner).key)
+
+    def test_obtain_token_with_wrong_password(self):
+        response = self._obtain_token(password="salah")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Token.objects.exists())
+
+    def test_owner_can_create_with_token_without_csrf(self):
+        token = self._obtain_token().data["token"]
+        client = APIClient(enforce_csrf_checks=True)
+        client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        response = client.post(self.list_url, self.payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(Achievement.objects.filter(name="Dean's List").exists())
+
+    def test_visitor_token_cannot_create(self):
+        token = self._obtain_token(username="visitor").data["token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        response = self.client.post(self.list_url, self.payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invalid_token_is_rejected_with_401(self):
+        self.client.credentials(HTTP_AUTHORIZATION="Token token-palsu")
+        response = self.client.post(self.list_url, self.payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertFalse(Achievement.objects.exists())
+
+    def test_public_list_does_not_need_token(self):
+        self.assertEqual(self.client.get(self.list_url).status_code, status.HTTP_200_OK)
+
+    def test_logout_revokes_token(self):
+        token = self._obtain_token().data["token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        response = self.client.post(self.logout_url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Token.objects.filter(key=token).exists())
+
+        # Token yang sudah dicabut tidak bisa dipakai lagi.
+        response = self.client.post(self.list_url, self.payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_requires_authentication(self):
+        self.assertEqual(self.client.post(self.logout_url).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_only_accepts_post(self):
+        token = self._obtain_token().data["token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        self.assertEqual(self.client.get(self.logout_url).status_code, status.HTTP_405_METHOD_NOT_ALLOWED)

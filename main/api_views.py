@@ -62,3 +62,13 @@ def achievement_star(request, achievement_id):
         achievement.starred_by.add(request.user)
     serializer = AchievementSerializer(achievement, context={"request": request})
     return Response(serializer.data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def api_logout(request):
+    # request.auth berisi objek Token jika login lewat TokenAuthentication;
+    # bernilai None jika lewat session, sehingga tidak ada token yang dihapus.
+    if request.auth is not None:
+        request.auth.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
